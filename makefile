@@ -1,10 +1,9 @@
 CC=coqc
-CFLAGS=
 
 aula: aula7.o 
 
 aula7.o: aula6.o
-	CC aula07_
+	CC aula07_alta_ordem.v
 
 aula6.o: aula5.o
 	CC aula06_poli.v
@@ -21,4 +20,4 @@ aula3.o: aula2.o
 aula2.o: 
 	CC aula02_gallina.v
 clean:
-	rm *.vo *.glob
+	rm *.vo *.glob *.aux
