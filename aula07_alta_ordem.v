@@ -76,20 +76,24 @@ Proof. reflexivity.  Qed.
     com aqueles que não satisfazem o teste. *)
 
 Definition partition {X : Type} (test : X -> bool)
-                     (l : list X) : list X * list X
-(* SUBSTITUA COM ":= _sua_definição_ ." *). Admitted.
+                     (l : list X) : list X * list X :=
+  let ys := filter test l in
+  let ns := filter (fun x => negb (test x)) l in
+  (ys, ns).
 
 Example test_partition1:
   partition oddb [1;2;3;4;5]
   = ([1;3;5], [2;4]).
 Proof.
- (* COMPLETE AQUI *) Admitted.
+  reflexivity.
+Qed.
 
 Example test_partition2:
   partition (fun x => false) [5;9;0]
   = ([], [5;9;0]).
 Proof.
- (* COMPLETE AQUI *) Admitted.
+  reflexivity.
+Qed.
 
 (** Outra função útil é [map]. *)
 
@@ -103,7 +107,7 @@ Fixpoint map {X Y:Type} (f:X->Y) (l:list X)
 Example test_map1:
   map (fun x => plus 3 x) [2;0;2]
   = [5;3;5].
-Proof. reflexivity.  Qed.
+Proof. reflexivity. Qed.
 
 (** Observe que as listas de entrada e saída
     podem ter tipos diferentes. *)
@@ -117,11 +121,23 @@ Proof. reflexivity.  Qed.
 (** Prove que [map] e [rev] comutam. Talvez
     você precise definir um lemma auxiliar. *)
 
+Lemma map_dist : forall (X Y : Type)
+  (f : X -> Y) (l1 l2: list X),
+  map f (l1 ++ l2) = map f l1 ++ map f l2.
+Proof.
+  intros. induction l1 as [| x l1' IH].
+  - reflexivity.
+  - simpl. rewrite IH. reflexivity.
+Qed.
+
 Theorem map_rev : forall (X Y : Type)
   (f : X -> Y) (l : list X),
   map f (rev l) = rev (map f l).
 Proof.
- (* COMPLETE AQUI *) Admitted.
+  intros. induction l as [| x l' IH].
+  - reflexivity.
+  - simpl. rewrite map_dist. rewrite IH. simpl. reflexivity.
+Qed.
 
 (** Outra função útil é [fold]. Esta função insere
     um operador binário [f] entre cada par de elementos
@@ -207,23 +223,72 @@ Proof. reflexivity. Qed.
 Theorem fold_length_correct : forall X (l : list X),
   fold_length l = length l.
 Proof.
-   (* COMPLETE AQUI *) Admitted.
+  intros. induction l as [| x l' IH].
+  - simpl. try reflexivity.
+  - simpl. unfold fold_length. simpl. rewrite <- IH.
+    unfold fold_length. reflexivity.
+Qed.
 
 (** **** Exercise: (fold_map)  *)
 (** Também podemos definir [map] em termos de [fold].
     Complete a definição [fold_map] e prove sua corretude. *)
 
+Print fold.
+
 Definition fold_map {X Y:Type} (f : X -> Y)
-                    (l : list X) : list Y
-(* SUBSTITUA COM ":= _sua_definição_ ." *). Admitted.
+                    (l : list X) : list Y :=
+  fold (fun (x: X) (ys: list Y) => (f x) :: ys) l [].
 
 Theorem fold_map_correct :
   forall (X Y : Type) (f : X -> Y) (l : list X),
     fold_map f l = map f l.
 Proof.
-   (* COMPLETE AQUI *) Admitted.
+  intros. induction l as [| x l' IH].
+  - simpl. try reflexivity.
+  - simpl. rewrite <- IH.
+    unfold fold_map. simpl. reflexivity.
+Qed.
 
 End Exercises.
+
+Fixpoint apply_n {X: Type} (count: nat) (f : X -> X)
+                 (x: X) : X :=
+  match count with
+  | 0 => x
+  | (S count') => f (apply_n count' f x)
+  end.
+
+Lemma neg_neg_b: forall (x: bool),
+  negb (negb x) = x.
+Proof.
+  intros.
+  destruct x.
+  - simpl. reflexivity.
+  - simpl. reflexivity.
+Qed.
+
+Theorem evenb_S : forall n : nat,
+  evenb (S n) = negb (evenb n).
+Proof.
+  intros. induction n as [|n' IH].
+  - reflexivity.
+  - Print evenb. rewrite -> IH. simpl. rewrite neg_neg_b.
+    reflexivity.
+Qed.
+
+Theorem apply_odd_neg: forall (x: bool) (n: nat),
+  oddb n = true -> apply_n n negb x = negb x.
+Proof.
+  intros x n. induction n as [| n' IH].
+  - simpl. unfold oddb. unfold evenb. simpl.
+    intros. destruct x.
+    + simpl. rewrite H. reflexivity.
+    + simpl. rewrite H. reflexivity.
+  - simpl. intros. destruct x.
+    + simpl. revert H. unfold oddb. rewrite evenb_S.
+      unfold oddb in IH. intros.
+      rewrite neg_neg_b in H. rewrite H in IH. simpl in IH.
+Abort.
 
 (* ############################################### *)
 (** * Leitura sugerida *)
