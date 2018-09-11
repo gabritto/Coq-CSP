@@ -1,6 +1,9 @@
 CC=coqc
 
-aula: aula7.o 
+aula: aula8.o 
+
+aula8.o: aula7.o
+	$(CC) aula08_taticas.v
 
 aula7.o: aula6.o
 	$(CC) aula07_alta_ordem.v
