@@ -308,16 +308,18 @@ Theorem plus_n_n_injective : forall n m,
      n + n = m + m ->
      n = m.
 Proof.
-  intros. Search "plus_n_Sm". induction n as [|n' IHn].
-  - simpl in H. Search (_ + _).
-    + induction m as [| m' IHm].
-      * reflexivity.
-      * inversion H.
-  - simpl in H. Search "plus_n_Sm".
-    + destruct m as [| m'].
-      * inversion H.
-      * Search "plus_n_Sm". rewrite <- plus_n_Sm in H. simpl in H.
-        rewrite <- plus_n_Sm in H. inversion H.
+  intros n. Search "plus_n_Sm".
+  induction n as [| n' IHn].
+  - Search (?E + ?E).
+    intros m H. unfold plus in H. destruct m.
+    + reflexivity.
+    + inversion H.
+  - intros m. Search "plus_n_Sm".
+    destruct m as [| m'].
+    + intros H. inversion H.
+    + intros H. simpl in H. rewrite <- plus_n_Sm in H.
+      inversion H. rewrite <- plus_n_Sm in H1. inversion H1.
+      apply IHn in H2. rewrite H2. reflexivity.
 Qed.
 
 (* ############################################### *)
@@ -410,7 +412,14 @@ Qed.
 Theorem beq_nat_true : forall n m,
     beq_nat n m = true -> n = m.
 Proof.
- (* COMPLETE AQUI *) Admitted.
+  intros n. induction n as [|n' IHn].
+  - simpl. intros m. destruct m as [| m'].
+    + intros eq. reflexivity.
+    + intros contra. inversion contra.
+  - intros m. destruct m as [| m'].
+    + simpl. intros contra. inversion contra.
+    + simpl. intros eq. apply IHn in eq. rewrite eq. reflexivity.
+Qed.
 
 (** Nem sempre fazer menos instanciações universais
     (para obter IHs mais gerais) é suficiente. Veja
@@ -455,6 +464,322 @@ Qed.
 Theorem nth_error_after_last:
   forall (n : nat) (X : Type) (l : list X),
      length l = n -> nth_error l n = None.
+Proof.
+  intros n X l. generalize dependent n. induction l as [|x l' IHl].
+  - simpl. reflexivity.
+  - intros n. intros eq. simpl in eq. simpl.
+    destruct n.
+    + inversion eq.
+    + inversion eq. simpl. rewrite H0. apply IHl. apply H0. 
+Qed.
+
+(* ############################################### *)
+(** * Tática [unfold] *)
+
+(** Como já vimos, em alguns casos, precisamos
+    expandir uma definição para poder manipulá-la.
+    A tática [unfold] tem este propósito. Considere
+    o exemplo a seguir.*)
+
+Definition square n := n * n.
+
+Theorem mult_plus_distr_r : forall n m p : nat,
+  (n + m) * p = (n * p) + (m * p).
+Proof.
+  intros. induction n as [| n' IHn'].
+  - simpl. reflexivity.
+  - simpl. rewrite IHn'. Search (_ + (_)).
+    rewrite -> plus_assoc. reflexivity.
+Qed.
+
+Theorem mult_assoc : forall n m p : nat,
+  n * (m * p) = (n * m) * p.
+Proof.
+  intros n m p. induction n as [| n' IHn'].
+  - simpl. reflexivity.
+  - simpl. rewrite mult_plus_distr_r.
+    rewrite IHn'. reflexivity.
+Qed.
+
+Lemma square_mult_try1 : forall n m,
+  square (n * m) = square n * square m.
+Proof.
+  intros n m.
+  simpl.
+  
+(** [simpl] não tem efeito aqui. Contudo,
+    ao expandir a definição observamos que
+    podemos usar associatividade (prova
+    anterior) e comutatividade da
+    multiplicação. *)
+
+  unfold square.
+  rewrite mult_assoc.
+  assert (H : n * m * n = n * n * m).
+  { rewrite mult_comm. apply mult_assoc. }
+  rewrite H. rewrite mult_assoc.
+  reflexivity.
+Qed.
+
+(** Táticas como [simpl], [reflexivity] e [apply]
+    normalmente expandem definições de funções
+    automaticamente, quando isto traz progresso
+    para a prova. Veja o exemplo a seguir. *)
+    
+Definition foo (x: nat) := 5.
+
+Fact silly_fact_1 :
+  forall m, foo m + 1 = foo (m + 1) + 1.
+Proof.
+  intros m.
+  simpl.
+  reflexivity.
+Qed.
+
+(** Contudo, isto nem sempre acontece. *)
+
+Definition bar x :=
+  match x with
+  | O => 5
+  | S _ => 5
+  end.
+  
+Fact silly_fact_2_FAILED :
+  forall m, bar m + 1 = bar (m + 1) + 1.
+Proof.
+  intros m.
+  simpl. (* Não faz nada! *)
+Abort.
+
+(** O motivo é que, ao expandir a definição de
+    bar, obtém-se um "match" envolvendo [m],
+    que não pode ser simplificado. Coq não
+    percebe que os casos do "match" são iguais.
+    
+    Uma possibilidade é destruir [m] o que
+    permite progresso. *)
+    
+Fact silly_fact_2 :
+  forall m, bar m + 1 = bar (m + 1) + 1.
+Proof.
+  intros m.
+  destruct m.
+  - simpl. reflexivity.
+  - simpl. reflexivity.
+Qed.
+
+(** Outra possibilidade, é usar [unfold]
+    e então observar que podemos usar
+    destruct para terminar a prova. *)
+
+Fact silly_fact_2' :
+  forall m, bar m + 1 = bar (m + 1) + 1.
+Proof.
+  intros m.
+  unfold bar.
+  destruct m.
+  - reflexivity.
+  - reflexivity.
+Qed.
+
+(* ############################################### *)
+(** * Usando [destruct] em expressões compostas *)
+
+(** É possível usar [destruct] em expressões. *)
+
+Definition sillyfun (n : nat) : bool :=
+  if beq_nat n 3 then false
+  else if beq_nat n 5 then false
+  else false.
+
+Theorem sillyfun_false : forall (n : nat),
+  sillyfun n = false.
+Proof.
+  intros n. unfold sillyfun.
+  destruct (beq_nat n 3).
+    - (* beq_nat n 3 = true *)
+      reflexivity.
+    - (* beq_nat n 3 = false *)
+      destruct (beq_nat n 5).
+      + (* beq_nat n 5 = true *)
+        reflexivity.
+      + (* beq_nat n 5 = false *)
+        reflexivity.
+Qed.
+
+(** De forma geral, seja [e] do tipo indutivo [T],
+    ao fazer [destruct e], cria-se um objetivo
+    para cada construtor [c] de [T], em cada um
+    substituindo as ocorrências de [e] por [c]
+    (tanto no contexto como no objetivo). *)
+
+(** **** Exercise: (combine_split)  *)
+(** Seja a seguinte função [split], prove
+    que [split] e [combine] são inversas
+    no seguinte sentido. *)
+
+Fixpoint split {X Y : Type} (l : list (X*Y))
+               : (list X) * (list Y) :=
+  match l with
+  | [] => ([], [])
+  | (x, y) :: t =>
+      match split t with
+      | (lx, ly) => (x :: lx, y :: ly)
+      end
+  end.
+
+Theorem combine_split :
+  forall X Y (l : list (X * Y)) l1 l2,
+    split l = (l1, l2) ->
+    combine l1 l2 = l.
+Proof.
+  intros X Y. intros l. induction l as [| (x, y) l' IHl].
+  - intros l1 l2. simpl. intros eq.
+    inversion eq. simpl. reflexivity.
+  - intros l1 l2. simpl. destruct (split l').
+    intros eq. inversion eq. destruct l1 as [ | x' l1'].
+    + inversion H0.
+    + inversion H0. simpl. destruct l2 as [ | y' l2'].
+      * inversion H1.
+      * inversion H1.
+    assert (P: (l, l0) = (l1', l2')).
+    {
+     rewrite H3. rewrite H5. reflexivity.
+    }
+    apply IHl in P. rewrite P. reflexivity.
+Qed.
+
+(** No entanto, às vezes, ao destruir,
+    podemos perder informação importante
+    para concluir a prova. *)
+
+Definition sillyfun1 (n : nat) : bool :=
+  if beq_nat n 3 then true
+  else if beq_nat n 5 then true
+  else false.
+
+Theorem sillyfun1_odd_FAILED :
+  forall (n : nat),
+     sillyfun1 n = true ->
+     oddb n = true.
+Proof.
+  intros n eq. unfold sillyfun1 in eq.
+  destruct (beq_nat n 3).
+  (* não é possível progredir *)
+Abort.
+
+(** O problema neste é caso é que ao fazer
+    [destruct (beq_nat n 3)], perdemos a
+    informação (beq_nat n 3) e como ela
+    foi destruída. Veja como contornar
+    este problema a seguir. *)
+
+Theorem sillyfun1_odd :
+  forall (n : nat),
+     sillyfun1 n = true ->
+     oddb n = true.
+Proof.
+  intros n eq. unfold sillyfun1 in eq.
+  destruct (beq_nat n 3) eqn:Heqe3.
+  (* Adiciona-se ao contexto a hipótese
+     Heqe3 dizendo como (beq_nat n 3)
+     foi destruído em cada caso. *)
+    - (* e3 = true *)
+      apply beq_nat_true in Heqe3.
+      rewrite -> Heqe3. reflexivity.
+    - (* e3 = false *)
+      destruct (beq_nat n 5) eqn:Heqe5.
+        + (* e5 = true *)
+          apply beq_nat_true in Heqe5.
+          rewrite -> Heqe5. reflexivity.
+        + (* e5 = false *) inversion eq.
+Qed.
+
+(** **** Exercise: (destruct_eqn_practice)  *)
+
+Theorem bool_fn_applied_thrice :
+  forall (f : bool -> bool) (b : bool),
+  f (f (f b)) = f b.
+Proof.
+  intros f. destruct b.
+  - destruct (f true) eqn:Hft.
+    + rewrite Hft. rewrite Hft. reflexivity.
+    + destruct (f false) eqn:Hff.
+      * apply Hft.
+      * apply Hff.
+  - destruct (f false) eqn:Hff.
+    + destruct (f true) eqn:Hft.
+      * apply Hft.
+      * apply Hff.
+    + rewrite Hff. apply Hff.
+Qed.
+
+(** * Resumo das táticas vistas até o momento
+      - [intros]
+      - [reflexivity]
+      - [apply]
+      - [apply... in H]
+      - [apply... with...]
+      - [simpl]
+      - [simpl in H]
+      - [rewrite]
+      - [rewrite ... in H]
+      - [symmetry]
+      - [symmetry in H]
+      - [unfold]
+      - [unfold... in H]
+      - [destruct... as...]
+      - [destruct... eqn:...]
+      - [induction... as...]
+      - [inversion]
+      - [assert (H: e)]
+      - [generalize dependent x] *)
+
+(** **** Exercise: (beq_nat_sym)  *)
+Theorem beq_nat_sym : forall (n m : nat),
+  beq_nat n m = beq_nat m n.
+Proof.
+  intros n. induction n.
+  - simpl. destruct m.
+    + reflexivity.
+    + reflexivity.
+  - simpl. destruct m.
+    + reflexivity.
+    + simpl. apply IHn. 
+Qed.
+
+(** **** Exercise: (split_combine)  *)
+(** Que propriedade é necessária sobre [l1] e [l2]
+    para que [split] [combine l1 l2 = (l1,l2)]
+    seja uma afirmação verdadeira?
+    
+    [Prop] significa que a definição está dando
+    um nome a uma proposição lógica.
+    
+    Complete a definição de [split_combine_statement]
+    com uma propriedade que diz quando [split] é a
+    inversa de [combine]. Então, prove esta propriedade.
+    
+    Dica: deixe sua hipótese indutiva o mais geral
+    possível (evitando fazer [intros] mais do o
+    necessário). *)
+
+Definition split_combine_statement : Prop :=
+  forall (X Y: Type) (l1: list X) (l2: list Y),
+  split (combine l1 l2) = (l1, l2).
+
+Theorem split_combine : split_combine_statement.
+Proof.
+  intros X Y.
+  intros l1. induction l1 as [| x l1' IHl1].
+Admitted.
+
+(** **** Exercise: (filter_exercise)  *)
+Theorem filter_exercise :
+  forall (X : Type) (test : X -> bool)
+         (x : X) (l lf : list X),
+     filter test l = x :: lf ->
+     test x = true.
 Proof.
  (* COMPLETE AQUI *) Admitted.
 
