@@ -764,15 +764,35 @@ Qed.
     possível (evitando fazer [intros] mais do o
     necessário). *)
 
+Lemma zero_length_list: forall (X: Type) (l: list X),
+  length l = 0 -> l = [].
+Proof.
+  intros X l. destruct l.
+  - intros eq. reflexivity.
+  - intros eq. inversion eq.
+Qed.
+
 Definition split_combine_statement : Prop :=
   forall (X Y: Type) (l1: list X) (l2: list Y),
-  split (combine l1 l2) = (l1, l2).
+  length l1 = length l2 -> split (combine l1 l2) = (l1, l2).
 
 Theorem split_combine : split_combine_statement.
 Proof.
   intros X Y.
   intros l1. induction l1 as [| x l1' IHl1].
-Admitted.
+  - simpl. intros l2 eq. symmetry in eq.
+   apply zero_length_list in eq.
+   rewrite eq. reflexivity.
+  - simpl. intros l2. intros eq.
+    destruct l2.
+    + inversion eq.
+    + simpl in eq. inversion eq. apply IHl1 in H0.
+      simpl. destruct (combine l1' l2) eqn:D.
+      simpl in H0. inversion H0.
+      * simpl. reflexivity.
+      * simpl. destruct p. simpl in H0.
+        rewrite H0. reflexivity.
+Qed.
 
 (** **** Exercise: (filter_exercise)  *)
 Theorem filter_exercise :
@@ -781,7 +801,12 @@ Theorem filter_exercise :
      filter test l = x :: lf ->
      test x = true.
 Proof.
- (* COMPLETE AQUI *) Admitted.
+  intros X test. induction l as [| x' l' IHl].
+  - simpl. intros lf. intros eq. inversion eq.
+  - simpl. intros lf. destruct (test x') eqn:Tx'.
+    + intros H. inversion H. rewrite <- H1. apply Tx'.
+    + apply IHl. 
+Qed.
 
 (* ############################################### *)
 (** * Leitura sugerida *)
