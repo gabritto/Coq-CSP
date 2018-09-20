@@ -539,14 +539,25 @@ Qed.
 Theorem dist_not_exists : forall (X:Type) (P : X -> Prop),
   (forall x, P x) -> ~ (exists x, ~ P x).
 Proof.
- (* COMPLETE AQUI *) Admitted.
+  intros X P. intros H. unfold not. intros contra.
+  destruct contra as [x' contra']. apply contra'. apply H.
+Qed.
 
 (** **** Exercise: (dist_exists_or)  *)
 Theorem dist_exists_or : forall (X:Type) (P Q : X -> Prop),
   (exists x, P x \/ Q x) <->
   (exists x, P x) \/ (exists x, Q x).
 Proof.
- (* COMPLETE AQUI *) Admitted.
+  intros X P Q. split.
+  - intros [x [HP | HQ]].
+    + left. exists x. apply HP.
+    + right. exists x. apply HQ.
+  - intros [HP | HQ].
+    + destruct HP as [x HP].
+      exists x. left. apply HP.
+    + destruct HQ as [x HQ].
+      exists x. right. apply HQ.
+Qed.
 
 (* ############################################### *)
 (** ** Programando com proposições *)
@@ -612,13 +623,48 @@ Lemma In_map_iff :
     In y (map f l) <->
     exists x, f x = y /\ In x l.
 Proof.
- (* COMPLETE AQUI *) Admitted.
+  intros A B f l. induction l as [|x l' IHl'].
+  - simpl. intros y. split.
+    + intros F. inversion F.
+    + intros [x H]. apply proj2 in H. apply H.
+  - intros y. split.
+    + intros [H | H].
+      * exists x. split. apply H. left. reflexivity.
+      * simpl. apply IHl' in H. destruct H as [x' H].
+        exists x'. split.
+          { apply proj1 in H. apply H. }
+          { destruct H as [H1 H2]. right. apply H2. }
+    + intros He. simpl.
+      destruct He as [x' H]. destruct H as [H1 H2]. simpl in H2.
+        destruct H2 as [H2 | H2].
+      * left. rewrite H2. apply H1.
+      * right. apply IHl'. exists x'. split.
+        { apply H1. }
+        { apply H2. } 
+Qed.
 
 (** **** Exercise: (In_app_iff)  *)
 Lemma In_app_iff : forall A l l' (a:A),
   In a (l++l') <-> In a l \/ In a l'.
 Proof.
- (* COMPLETE AQUI *) Admitted.
+  intros A l l'. induction l as [| a' l1 IHl1].
+  - split.
+    + simpl. intros H. right. apply H.
+    + simpl. intros [contra | H].
+      * inversion contra.
+      * apply H.
+  - split.
+    + simpl. intros [H | H].
+      * left. left. apply H.
+      * apply IHl1 in H. destruct H as [H | H].
+        { left. right. apply H. }
+        { right. apply H. }
+    + intros [H | H].
+      * simpl in H. simpl. destruct H as [H | H].
+        { left. apply H. }
+        { right. apply IHl1. left. apply H. }
+      * simpl. right. apply IHl1. right. apply H.
+Qed.
 
 (** **** Exercise: (All)  *)
 (** Defina uma função recursiva [All] que retorna uma
@@ -627,14 +673,28 @@ Proof.
     para provar que sua definição é correta, prove o
     lemma [All_In]. *)
 
-Fixpoint All {T : Type} (P : T -> Prop) (l : list T) : Prop
-(* SUBSTITUA COM ":= _sua_definição_ ." *). Admitted.
+Fixpoint All {T : Type} (P : T -> Prop) (l : list T) : Prop :=
+  match l with
+  | [] => True
+  | (x :: l') => P x /\ All P l'
+  end.
 
 Lemma All_In :
   forall T (P : T -> Prop) (l : list T),
     (forall x, In x l -> P x) <-> All P l.
 Proof.
- (* COMPLETE AQUI *) Admitted.
+  intros T P l. induction l as [| t l' IHl'].
+  - split.
+    + simpl. intros H. apply I.
+    + simpl. intros H. intros x. intros false. inversion false.
+  - split.
+    + simpl. intros H. split.
+      * apply H. left. reflexivity.
+      * apply IHl'. intros x. intros Hin.
+        apply H. right. apply Hin.
+    + simpl. intros [H1 H2]. intros x.
+      intros H.
+Admitted.
 
 (* ############################################### *)
 (** * Aplicando teoremas a argumentos *)
@@ -683,6 +743,8 @@ Proof.
 Qed.
 
 (** Logo, é possível usar teoremas como funções! *)
+
+Print plus_comm.
 
 Example lemma_application_ex :
   forall {n : nat} {ns : list nat},
