@@ -694,7 +694,11 @@ Proof.
         apply H. right. apply Hin.
     + simpl. intros [H1 H2]. intros x.
       intros H.
-Admitted.
+      rewrite <- IHl' in H2.
+      destruct H as [H | H].
+      * rewrite <- H. apply H1.
+      * apply H2. apply H.
+Qed.
 
 (* ############################################### *)
 (** * Aplicando teoremas a argumentos *)
@@ -744,19 +748,319 @@ Qed.
 
 (** Logo, é possível usar teoremas como funções! *)
 
-Print plus_comm.
-
 Example lemma_application_ex :
   forall {n : nat} {ns : list nat},
     In n (map (fun m => m * 0) ns) ->
     n = 0.
 Proof.
   intros n ns H.
+  Print proj1.
+  Print In_map_iff.
+  Search "In_map_iff".
+  Compute (proj1 _ _).
   destruct (proj1 _ _ (In_map_iff _ _ _ _ _) H)
            as [m [Hm _]].
   rewrite mult_0_r in Hm.
   rewrite <- Hm. reflexivity.
 Qed.
+
+(**
+In_map_iff:
+  forall (A B : Type) (f : A -> B) (l : list A) (y : B), In y (map f l) <-> (exists x : A, f x = y /\ In x l)
+
+In_map_iff:
+  f = fun m => m * 0
+  y = n
+  l = ns
+result:
+  In n (map (fun m => m * 0) ns) <-> (exists x: nat, x * 0 = n /\ In x ns)
+result rewriten:
+  In n (map (fun m => m * 0) ns) -> (exists x: nat, x * 0 = n /\ In x ns)
+  /\ In n (map (fun m => m * 0) ns) <-> (exists x: nat, x * 0 = n /\ In x ns)
+
+proj1 _ _ result:
+  In n (map (fun m => m * 0) ns) -> (exists x: nat, x * 0 = n /\ In x ns)
+applied to H:
+  (exists x: nat, x * 0 = n /\ In x ns)
+**)
+
+(* ############################################### *)
+(** * Coq vs. Teoria dos conjuntos *)
+
+(** O core lógico de Coq é baseado no _Calculus of
+    Inductive Constructions_, que, por sua vez,
+    difere de outros sistemas formais como
+    a teoria de conjuntos de Zermelo-Fraenkel (ZFC).
+
+    Por exemplo, em ZFC, um elemento pode ser membro
+    de vários conjuntos. Em Coq, um termo é membro
+    de no máximo um tipo. Logo, no lugar de dizer
+    que um número natural [n] pertence ao conjunto
+    dos números pares, em Coq, dizemos que a
+    afirmação [ev n] é verdadeira, onde
+    [ev : nat -> Prop].
+
+    Contudo, há casos em que expressar uma certa
+    afirmação em Coq não é algo direto, às vezes,
+    nem possível, exceto se enriquecermos a lógica
+    suportada por Coq com axiomas adicionais. *)
+
+(** ** Functional Extensionality *)
+
+(** Duas funções [f] e [g] são consideradas iguais
+    se elas produzem a mesma saída para toda
+    entrada possível.
+
+    (forall x, f x = g x) -> f = g
+    
+    Esta definição é conhecida como o princípio
+    da _functional extensionality_, e ela não faz
+    parte dos axiomas básicos definidos em Coq.
+    Logo, proposições envolvendo este conceito
+    não podem ser provadas. *)
+    
+Example function_equality_ex2 :
+  (fun x => plus x 1) = (fun x => plus 1 x).
+Proof.
+   (* Stuck *)
+Abort.
+
+(** Contudo, podemos axiomatizar esta definição
+    usando o comando [Axiom]. *)
+
+Axiom functional_extensionality :
+  forall {X Y: Type} {f g : X -> Y},
+    (forall (x:X), f x = g x) -> f = g.
+
+(** O efeito de [Axiom] é o mesmo de definir um
+    Teorema e não prová-lo, através do uso
+    de [Admitted]. Contudo, aqui, não existe
+    a intenção de provar posteriormente a afirmação. *)
+
+Example function_equality_ex2 :
+  (fun x => plus x 1) = (fun x => plus 1 x).
+Proof.
+  apply functional_extensionality. intros x.
+  apply plus_comm.
+Qed.
+
+(** É preciso ter cuidado ao adicionar novos
+    axiomas para não introduzir inconsistências.
+    Não é simples, em linhas gerais, provar
+    a consistência lógica de um conjunto de axiomas.
+    
+    No caso particular do functional extensionality,
+    este é consistente com o core lógico de Coq.
+    
+    O comando [Print Assumptions] imprime que
+    axiomas adicionais foram utilizados em uma
+    certa prova. *)
+
+Print Assumptions function_equality_ex2.
+(* ===>
+     Axioms:
+     functional_extensionality :
+         forall (X Y : Type) (f g : X -> Y),
+                (forall x : X, f x = g x) -> f = g *)
+
+(** ** Proposições e Booleanos *)
+
+(** Podemos definir fatos lógicos usando _booleanos_ 
+    ou _proposições_. Por exemplo, dizer que [n] é
+    par, pode ser representado dizendo que
+    
+    (1) [evenb n] retorna [true] ou
+    (2) que existe um [k] tal que [n = double k]
+    
+    Estas duas definições são equivalentes. *)
+
+(** Definindo lemmas auxiliares. *)
+
+Theorem evenb_S :
+  forall n : nat, evenb (S n) = negb (evenb n).
+Proof.
+  intro n. induction n as [| n'].
+  - simpl. reflexivity.
+  - rewrite IHn'. simpl.
+    Search (negb (negb _)).
+    rewrite negb_involutive.
+    reflexivity.
+Qed.
+
+Theorem evenb_double :
+  forall k, evenb (double k) = true.
+Proof.
+  intros k. induction k as [|k' IHk'].
+  - reflexivity.
+  - simpl. apply IHk'.
+Qed.
+
+(** **** Exercise: (evenb_double_conv)  *)
+Theorem evenb_double_conv : forall n,
+  exists k, n = if evenb n then double k
+                else S (double k).
+Proof.
+  intros n. induction n as [| n'].
+  - simpl. exists 0. reflexivity.
+  - destruct IHn' as [k H].
+    rewrite -> evenb_S. unfold negb.
+    destruct (evenb n') eqn: H1.
+    + exists k. rewrite H. reflexivity.
+    + exists (S k). simpl. rewrite H. reflexivity.
+Qed.
+
+Theorem even_bool_prop : forall n,
+  evenb n = true <-> exists k, n = double k.
+Proof.
+  induction n as [| n'].
+  - simpl. split.
+    + intros eq. exists 0. reflexivity.
+    + intros ex. reflexivity.
+  - split.
+    + intros H. Compute (evenb_double_conv _).
+      destruct (evenb_double_conv (S n')) as [k H0].
+      rewrite H in H0. exists k. apply H0.
+    + intros [k H0]. rewrite H0. apply evenb_double.
+Qed.
+
+(** Dizemos, portanto, que a computação de
+    [evenb n] _reflete_ a proposição lógica
+    [exists k, n = double k]. Veja outro exemplo
+    a seguir. *)
+    
+Theorem beq_nat_refl : forall n : nat,
+  true = beq_nat n n.
+Proof.
+  intro n. induction n as [| n'].
+  - reflexivity.
+  - simpl. rewrite IHn'.
+    reflexivity.
+Qed.
+
+Theorem beq_nat_true_iff : forall n1 n2 : nat,
+  beq_nat n1 n2 = true <-> n1 = n2.
+Proof.
+  intros n1 n2. split.
+  - apply beq_nat_true.
+  - intros H. rewrite H.
+    rewrite <- beq_nat_refl.
+    reflexivity.
+Qed.
+
+(** Em algumas situações, a definição proposicional
+    é mais útil do que a booleana. Por exemplo,
+    saber que [beqnat n m = true] pode não ser tão
+    útil quanto saber que [n = m]; uma vez que,
+    a segunda opção permite realizar reescrita.
+    
+    Contudo, em outras situações, a definição
+    booleana é mais útil. Por exemplo, Coq
+    não permite testar se uma proposição
+    qualquer é verdadeira ou falsa na definição
+    de uma função. Veja que o código abaixo
+    não é aceito. *)
+
+Fail Definition is_even_prime n :=
+  if n = 2 then true
+  else false.
+
+(** Coq reclama que [n = 2] tem tipo [Prop],
+    quando ele espera outro tipo indutivo com
+    dois elementos (construtores). Isto está
+    associado com o fato que em Coq toda função
+    é total e precisa ser computável (em particular,
+    para permitir a extração de código executável.
+    
+    Se fosse permitir usar [Prop] em uma análise
+    de casos, seria possível escrever funções
+    não computáveis.
+    
+    Em alguns casos, mesmo tendo uma propriedade
+    computável, é mais fácil defini-la usando
+    [Prop], uma vez que funções em Coq possuem
+    restrições significativas na sua definição. 
+    
+    Por outro lado, um ponto positivo em definir
+    fatos de forma computável é permitir certa
+    automação através da computação de termos em
+    Coq. Esta é uma técnica conhecida como _proof
+    by reflection_. Veja o exemplo a seguir. *)
+
+Example even_1000 : exists k, 1000 = double k.
+Proof. exists 500. reflexivity. Qed.
+
+Example even_1000' : evenb 1000 = true.
+Proof. simpl. reflexivity. Qed.
+
+Example even_1000'' : exists k, 1000 = double k.
+Proof.
+  Print even_bool_prop.
+  apply even_bool_prop.
+  reflexivity.
+Qed.
+
+(** **** Exercise: (logical_connectives)  *)
+(** Os próximos lemmas relacionam conectivos lógicos
+    com as respectivas operações booleanas. *)
+    
+Lemma andb_true_iff : forall b1 b2:bool,
+  b1 && b2 = true <-> b1 = true /\ b2 = true.
+Proof.
+ (* COMPLETE AQUI *) Admitted.
+
+Lemma orb_true_iff : forall b1 b2,
+  b1 || b2 = true <-> b1 = true \/ b2 = true.
+Proof.
+ (* COMPLETE AQUI *) Admitted.
+
+(** ** Lógica clássica vs. construtivas *)
+
+(** Anteriormente, vimos que não é possível
+    verificar se uma proposição [P] é verdadeira
+    ou não dentro da definição de uma função
+    em Coq. O mesmo se aplica para provas. 
+    O seguinte princípio não é possível derivar
+    a partir dos axiomas definidos em Coq. *)
+
+Definition excluded_middle :=
+  forall P : Prop, P \/ ~ P.
+
+(** Ao provar objetivos na prova [_ \/ _],
+    usamos [left] ou [right] que, implicitamente,
+    requer saber qual lado da disjunção é
+    verdadeiro. Contudo, neste caso, nada se
+    sabe sobre [P]. No entanto, se [P] for
+    refletido em algum termo booleano [b],
+    é possível realizar a prova; basta checar
+    o valor de [b]. *)
+
+Theorem restricted_excluded_middle : forall P b,
+  (P <-> b = true) -> P \/ ~ P.
+Proof.
+  intros P b H. destruct b.
+  - left. rewrite H. reflexivity.
+  - right. rewrite H. unfold not.
+    intros contra. inversion contra.
+Qed.
+
+(** Em particular, a propriedade de _excluded middle_
+    é válida para equações [n = m] entre números
+    naturais [n] e [m]. *)
+
+Theorem restricted_excluded_middle_eq :
+  forall (n m : nat), n = m \/ n <> m.
+Proof.
+  intros n m.
+  apply (restricted_excluded_middle (n = m) (beq_nat n m)).
+  symmetry. apply beq_nat_true_iff.
+Qed.
+
+(** Como consequência de não assumir o _excluded middle_,
+    se existe uma prova para [exists x, P x], então é
+    possível explicitar um valor para [x] tal que
+    [P x] é verdade; em outras palavras, toda prova
+    de existência é _construtiva_. Lógicas como ZFC
+    são tidas como lógicas clássicas. *)
 
 (* ############################################### *)
 (** * Leitura sugerida *)
