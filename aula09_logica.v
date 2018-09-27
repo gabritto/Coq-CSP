@@ -1006,12 +1006,33 @@ Qed.
 Lemma andb_true_iff : forall b1 b2:bool,
   b1 && b2 = true <-> b1 = true /\ b2 = true.
 Proof.
- (* COMPLETE AQUI *) Admitted.
+  intros b1 b2.
+  split.
+  - simpl. intros H. destruct b1.
+    + destruct b2.
+      * auto.
+      * auto.
+    + simpl in H. rewrite H. destruct b2.
+      * auto.
+      * auto.
+  - intros [H1 H2]. rewrite H1. rewrite H2. simpl. reflexivity.
+Qed.
 
 Lemma orb_true_iff : forall b1 b2,
   b1 || b2 = true <-> b1 = true \/ b2 = true.
 Proof.
- (* COMPLETE AQUI *) Admitted.
+  intros b1 b2. split.
+  - intros H. destruct b1.
+    + left. reflexivity.
+    + destruct b2.
+      * right. reflexivity.
+      * simpl in H. rewrite H. left. reflexivity.
+  - intros [H | H].
+    + rewrite H. simpl. reflexivity.
+    + rewrite H. destruct b1.
+      * reflexivity.
+      * reflexivity.
+Qed.
 
 (** ** Lógica clássica vs. construtivas *)
 
