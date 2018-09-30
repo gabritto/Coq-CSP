@@ -382,37 +382,85 @@ Inductive next_even : nat -> nat -> Prop :=
 (** A seguir, vários exercícios sobre as relações
     [<=] e [<], que constituem uma boa prática. *)
 
+Lemma le_Sm_n :
+  forall m n, S m <= n -> m <= n.
+Proof.
+  intros m n H. induction H as [|m' H IHm'].
+  - apply le_S. apply le_n.
+  - apply le_S. apply IHm'.
+Qed.
+
 Lemma le_trans :
   forall m n o, m <= n -> n <= o -> m <= o.
-Proof.(* COMPLETE AQUI *) Admitted.
+Proof.
+  intros m n o H. induction H as [| m' H IHm'].
+  - intros H1. apply H1.
+  - intros H2. apply le_Sm_n in H2. apply IHm'. apply H2.
+Qed.
 
 Theorem O_le_n : forall n,
   0 <= n.
-Proof.(* COMPLETE AQUI *) Admitted.
+Proof.
+  induction n as [| n' IH'].
+  - apply le_n.
+  - apply le_S. apply IH'.
+Qed.
 
 Theorem n_le_m__Sn_le_Sm : forall n m,
   n <= m -> S n <= S m.
-Proof.(* COMPLETE AQUI *) Admitted.
+Proof.
+  intros n m le_n_m. induction le_n_m.
+  - apply le_n.
+  - apply le_S. apply IHle_n_m.
+Qed.
 
 Theorem Sn_le_Sm__n_le_m : forall n m,
   S n <= S m -> n <= m.
-Proof.(* COMPLETE AQUI *) Admitted.
+Proof.
+  intros n m. intros H. inversion H.
+  - apply le_n.
+  - apply le_Sm_n in H1. apply H1.
+Qed.
 
 Theorem le_plus_l : forall a b,
   a <= a + b.
-Proof.(* COMPLETE AQUI *) Admitted.
+Proof.
+  intros a b. induction a as [| a' IHa'].
+  - simpl. apply O_le_n.
+  - simpl. apply n_le_m__Sn_le_Sm. apply IHa'.
+Qed.
 
 Theorem plus_lt : forall n1 n2 m,
   n1 + n2 < m -> n1 < m /\ n2 < m.
-Proof.(* COMPLETE AQUI *) Admitted.
+Proof.
+  intros n1 n2 m. intros H. induction H.
+  - unfold lt. split.
+    + apply n_le_m__Sn_le_Sm. apply le_plus_l.
+    + apply n_le_m__Sn_le_Sm. rewrite plus_comm.
+      apply le_plus_l.
+  - split.
+    + apply proj1 in IHle. unfold lt.
+      unfold lt in IHle. apply le_S. apply IHle.
+    + apply proj2 in IHle. unfold lt.
+      unfold lt in IHle. apply le_S. apply IHle.
+Qed.
 
 Theorem lt_S : forall n m,
   n < m -> n < S m.
-Proof.(* COMPLETE AQUI *) Admitted.
+Proof.
+  intros n m. unfold lt. intros H.
+  apply le_S. apply H.
+Qed.
 
 Theorem leb_complete : forall n m,
   leb n m = true -> n <= m.
-Proof.(* COMPLETE AQUI *) Admitted.
+Proof.
+  intros n. induction n as [| n' IHn'].
+  - simpl. intros m. intros H. apply O_le_n.
+  - simpl. intros m. intros H. destruct m as [|m'].
+    + inversion H.
+    + apply IHn' in H. apply n_le_m__Sn_le_Sm. apply H.  
+Qed.
 
 (** O próximo teorema é mais fácil de provar
     com uma indução sobre [m]. *)
@@ -420,7 +468,16 @@ Proof.(* COMPLETE AQUI *) Admitted.
 Theorem leb_correct : forall n m,
   n <= m ->
   leb n m = true.
-Proof.(* COMPLETE AQUI *) Admitted.
+Proof.
+  intros n m. generalize dependent n.
+  induction m as [| m' IHm'].
+  - intros n. intros H. inversion H.
+    reflexivity.
+  - intros n. intros H. destruct n as [| n'].
+    + simpl. reflexivity.
+    + simpl. apply Sn_le_Sm__n_le_m in H.
+      apply IHm' in H. apply H.
+Qed.
 
 (** O próximo teorema pode ser provado
     facilmente sem [induction]. *)
@@ -428,7 +485,16 @@ Proof.(* COMPLETE AQUI *) Admitted.
 Theorem leb_true_trans : forall n m o,
   leb n m = true ->
   leb m o = true -> leb n o = true.
-Proof.(* COMPLETE AQUI *) Admitted.
+Proof.
+  intros n m o. intros Hnm Hmo.
+  apply leb_complete in Hnm.
+  apply leb_complete in Hmo.
+  Search "le_trans".
+  apply leb_correct.
+  apply le_trans with (n := m).
+  - apply Hnm.
+  - apply Hmo.
+Qed.
 
 (* ############################################### *)
 (** * Estudo de caso: expressões regulares *)
