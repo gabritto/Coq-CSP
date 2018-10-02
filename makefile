@@ -1,6 +1,9 @@
 CC=coqc
 
-aula: aula11.o 
+aula: aula12.o
+
+aula12.o: aula11.o
+	$(CC) aula12_auto.v
 
 aula11.o: aula9.o
 	$(CC) aula11_prop_indutivas.v
