@@ -1,0 +1,11 @@
+TODO:
+- Operators' associativity and level.
+- Define Event type (maybe simpler at first)
+- Add tau event
+
+Questions:
+- What is Set in Coq?
+- How should the set of Events be represented and included in the definitions?
+- How should recursion be modelled? (p. 20)
+- What is Hypothesis and Section in Coq? (as in Coq.Lists.ListSet)
+
