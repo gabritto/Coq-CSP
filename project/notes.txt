@@ -1,11 +1,20 @@
 TODO:
 - Operators' associativity and level.
 - Define Event type (maybe simpler at first)
-- Add tau event
+    - evento = string
+    - tau: caso especial
+- Add skip
+- Check CoInductive
 
 Questions:
-- What is Set in Coq?
-- How should the set of Events be represented and included in the definitions?
-- How should recursion be modelled? (p. 20)
-- What is Hypothesis and Section in Coq? (as in Coq.Lists.ListSet)
+v- How should the set of Events be represented and included in the definitions?
+    (e.g. Type or Module parameter (or implicit argument?))
+v- How should recursion be modelled? (p. 20)
+l- What is Hypothesis and Section in Coq? (as in Coq.Lists.ListSet)
+l- Coq lazy eval - or how to define Y combinator (and for a vector of equations)
+
+Ideias:
+- considerar só eventos (sem distinção de entrada/saída)
+- teorema: processo sem laços -> traces finito de tamanho limitado
+- semântica funcional traces (com limitante no tamanho dos traces)
 
