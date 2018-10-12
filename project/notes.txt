@@ -5,6 +5,7 @@ TODO:
     - tau: caso especial
 - Add skip
 - Check CoInductive
+- Prove algebra laws within models
 
 Questions:
 v- How should the set of Events be represented and included in the definitions?
@@ -17,4 +18,25 @@ Ideias:
 - considerar só eventos (sem distinção de entrada/saída)
 - teorema: processo sem laços -> traces finito de tamanho limitado
 - semântica funcional traces (com limitante no tamanho dos traces)
+
+v- Evento: uma string (por enquanto, não considerar tau)
+v- Name (o nome de um processo): uma string também
+v- Outro tipo (defProc) que associa um nome a um corpo de processo
+v- Outro tipo que representa o alfabeto (i.e., os eventos declarados -- lista de strings)
+
+v- Outro tipo que representa uma especificação considerando um alfabeto e uma lista de defProc
+
+v- Criar uma função para verificar se uma especificação é bem formada
+  (não podem existir eventos com mesmo nome)
+  (não podem existir defProc com mesmo nome)
+  (todo evento e nome de processo referenciado, precisa ter sido declarado)
+v- Criar uma notação sintática para representar isto tudo
+  Por exemplo: channel [b,c], definitions [P = (c -> STOP [] b -> STOP), Q = ...]
+- Criar uma função para retornar todos os traces até um tamanho x
+- Teorema: se um processo não tem recursão, existe um x, tal que não existem traces maiores do que x.
+  (laço: lembrar que pode ser recursão mútua)
+
+http://www.cs.swan.ac.uk/csr591/Papers/isobe05.pdf
+https://link.springer.com/content/pdf/10.1007%2Fs00165-018-0453-7.pdf
+
 
