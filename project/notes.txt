@@ -8,6 +8,13 @@ TODO:
 - Prove algebra laws within models
 
 Questions:
+- Define or find a better set module which wraps over lists and with a better
+  way to handle decidability (maybe using module parameters)
+- Conservative, static approach to analysing recursion
+  (in the future, boolean expressions may contain event variables).
+- How to define recursive specs?
+  (graphs? e.g. https://github.com/coq-contribs/graph-basics/blob/master/Graphs.v,
+  https://github.com/coq-contribs/graph-basics)
 v- How should the set of Events be represented and included in the definitions?
     (e.g. Type or Module parameter (or implicit argument?))
 v- How should recursion be modelled? (p. 20)

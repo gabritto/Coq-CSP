@@ -16,7 +16,7 @@ Proof.
   apply string_dec.
 Qed.
 
-Definition Alphabet: Type := set Event.
+Definition Alphabet: Type := list Event.
 
 Inductive Proc: Type :=
   | Stop: Proc
@@ -26,22 +26,13 @@ Inductive Proc: Type :=
   | ProcCond: bool -> Proc -> Proc -> Proc
   | ProcName: string -> Proc. 
   
-Inductive DefProc: Type :=
-  | Def: string -> Proc -> DefProc.
+Inductive ProcDef: Type :=
+  | Def: string -> Proc -> ProcDef.
 
 Inductive Spec: Type :=
-  | SpecDef: Alphabet -> list DefProc -> Spec. 
+  | SpecDef: Alphabet -> list ProcDef -> Spec. 
 
 Module CSP_Syntax_Notations.
-(* set notations *)
-
-(*TODO: Think about using list instead of set for convenience *)
-(*
-Notation "{ }" := nil (format "{ }").
-Notation "{ x }" := (set_add _ x nil).
-Notation "{ x ; y ; .. ; z }" := (set_add _ x (set_add _ y .. (set_add _ z nil) ..)).
-*)
-
 (* CSP *)
 Notation "a -->> p" := (ProcPref a p)
   (at level 60, right associativity).
@@ -49,11 +40,13 @@ Notation "a -->> p" := (ProcPref a p)
 Notation "p [-] q" := (ProcExtChoice p q)
   (at level 60, right associativity).
                      
-Notation "'if' b 'then' p 'else' q" := (ProcCond b p q)
+Notation "p << b >> q" := (ProcCond b p q)
   (at level 60, right associativity).
 
+(* TODO: find notation for this
 Notation "p '" := (ProcName p)
   (at level 60, no associativity).
+*)
 
 Notation "p ::= q" := (Def p q)
   (at level 99, no associativity).
@@ -61,24 +54,55 @@ Notation "p ::= q" := (Def p q)
 Notation "'channel' a , 'definitions' ds" := (SpecDef a ds)
   (at level 99, no associativity).
   
-Check "P"'.
-(* Notation for lists that are sets using set_add *)
+Check ProcName "P".
 
 Example procTest := channel ["a"; "b"],
-  definitions ["P" ::= ("a" -->> Stop) [-] ("b" -->> Stop)].
+  definitions
+    ["P" ::= ("a" -->> Stop) [-] ("b" -->> Stop);
+     "Q" ::= (ProcName "R" << true >> Skip) ].
 
 Check procTest.
+Compute procTest.
 
 End CSP_Syntax_Notations.
 
 Import CSP_Syntax_Notations.
 
-Fixpoint process_names (spec: Spec): list string :=
-  match spec with (SpecDef a procs) =>
-    map (fun d => match d with (Def s _) => s end) procs
+Fixpoint extract_names (proc: Proc): list string :=
+  match proc with
+  | Skip => []
+  | Stop => []
+  | e -->> proc'  => extract_names proc'
+  | p [-] q => extract_names p ++ extract_names q
+  | p <<_>> q => extract_names p ++ extract_names q
+  | ProcName name => [name]
   end.
 
-Compute process_names procTest.
+Fixpoint extract_events (proc: Proc): list Event :=
+  match proc with
+  | e -->> proc' => e :: extract_events proc'
+  | _ => []
+  end.
+
+Definition events_used (procs: list ProcDef): list Event :=
+  flat_map
+    (fun def =>
+      match def with (Def _ proc) => extract_events proc end)
+    procs.
+
+Definition process_names_used (procs: list ProcDef): list string :=
+  flat_map
+    (fun def => 
+      match def with (Def _ proc) => extract_names proc end)
+    procs.
+
+Definition process_names_defined (procs: list ProcDef): list string :=
+  map (fun d => match d with (Def s _) => s end) procs.
+
+Example procs := match procTest with (SpecDef a ps) => ps end.
+
+Compute process_names_defined procs.
+Compute process_names_used procs.
 
 Search "distinct".
 Search "unique".
@@ -90,6 +114,17 @@ Fixpoint distinct {T: Type}
   | t :: l' => let t_unique := In t l' in
     t_unique /\ distinct T_eq_dec l'
   end.
+
+Definition well_formed_spec (spec: Spec): Prop :=
+  match spec with (SpecDef alphabet procDefs) =>
+    distinct string_dec (process_names_defined procDefs) /\
+    incl (process_names_used procDefs) (process_names_defined procDefs) /\
+    distinct string_dec alphabet /\
+    incl (events_used procDefs) alphabet
+  end.
+
+(* Dealing with recursion *)
+(* Define non-recursive spec prop *)
 
 Definition Trace: Type := list Event.
 
