@@ -1,9 +1,9 @@
 TODO:
-- Operators' associativity and level.
+- Operators' associativity and level
+- Notation
 - Define Event type (maybe simpler at first)
     - evento = string
-    - tau: caso especial
-- Add skip
+    - tau: caso especial (?)
 - Check CoInductive
 - Prove algebra laws within models
 

@@ -2,7 +2,9 @@ Require Import Coq.Lists.ListSet.
 Require Import Coq.Lists.List.
 Require Import Coq.Setoids.Setoid.
 Require Import Coq.Strings.String.
-
+Require Import Coq.Strings.Ascii.
+Require Import Coq.Bool.Bool.
+Require Import Coq.Structures.OrderedType.
 Module CSP_Syntax.
 
 Set Implicit Arguments.
@@ -44,7 +46,7 @@ Notation "p << b >> q" := (ProcCond b p q)
   (at level 60, right associativity).
 
 (* TODO: find notation for this
-Notation "p '" := (ProcName p)
+Notation "'var' p" := (ProcName p)
   (at level 60, no associativity).
 *)
 
@@ -124,8 +126,80 @@ Definition well_formed_spec (spec: Spec): Prop :=
   end.
 
 (* Dealing with recursion *)
+
+Fixpoint find_process (p: string) (procDefs: list ProcDef): Proc :=
+  match procDefs with
+  | [] => Stop
+  | (Def q qbody) :: procDefs' =>
+     if string_dec q p then qbody else find_process p procDefs' 
+  end.
+
+(* Graph auxiliar definition *)
+Definition proc_dependency (spec: Spec) (p: string): list string :=
+  match spec with (SpecDef a ps) =>
+    let p_body := find_process p ps in
+    extract_names p_body
+  end.
+
+(* Map *)
+Module StringOT <: OrderedType.
+  Definition t := string.
+  
+  Definition eq := @eq t.
+  
+  Fixpoint lt (s1: string) (s2: string): Prop :=
+    match s1, s2 with
+    | EmptyString, EmptyString => False
+    | EmptyString, _ => True
+    | _, EmptyString => False
+    | (String ch1 s1'), (String ch2 s2') =>
+      let c1 := nat_of_ascii ch1 in
+      let c2 := nat_of_ascii ch2 in
+        c1 < c2 /\ lt s1' s2'
+    end.
+  
+  Definition eq_refl := @refl_equal t.
+  
+  Definition eq_sym := @sym_eq t.
+  
+  Definition eq_trans := @trans_eq t.
+  
+  Theorem lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
+  Proof. (* TODO *) Admitted.
+  
+  Theorem lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
+  Proof. (* TODO *) Admitted.
+  
+  Check Compare.
+  
+  Check Compare lt eq.
+   
+  Definition compare: forall x y : string, Compare lt eq x y.
+  Proof.
+    intros x. induction x.
+    - intros y. destruct y.
+      + apply EQ. simpl. reflexivity.
+      + apply LT. simpl. apply I.
+    - intros y. destruct y.
+      + apply GT. simpl. apply I.
+      +
+  Admitted.
+  
+  Definition eq_dec := string_dec.
+  
+End StringOT.
+
+
+
+(* Graph cycle *)
+(*TODO: DFS solution*)
+Definition 
+
 (* Define non-recursive spec prop *)
 
+
+(* Traces *)
+(* TODO: define traces function up to a maximum size *)
 Definition Trace: Type := list Event.
 
 Theorem Trace_eq_dec: forall (x y: Trace), {x = y} + {x <> y}.
