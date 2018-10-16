@@ -190,10 +190,8 @@ Module StringOT <: OrderedType.
 End StringOT.
 
 
-
 (* Graph cycle *)
 (*TODO: DFS solution*)
-Definition 
 
 (* Define non-recursive spec prop *)
 
@@ -237,7 +235,34 @@ Proof.
   unfold empty_set. intros H. inversion H.
 Qed.
 
+Definition get_proc_defs (spec: Spec): list ProcDef :=
+  match spec with (SpecDef _ procDefs) => procDefs end.
+
 (* Functional definition of the set of traces of a process*)
+
+Fixpoint bound_traces (n: nat) (proc: Proc)
+  (spec: Spec): set Trace :=
+  match n with
+  | O => [[]]
+  | S n' =>
+    match proc with
+    | Stop => [[]]
+    | Skip => [[]]
+    | ProcPref e q =>
+      let qTraces := bound_traces n' q spec in
+      let qTracesWithE := setMap (fun trace => e :: trace) qTraces in
+        setUnion [[]] qTracesWithE
+    | ProcExtChoice p q =>
+      setUnion (bound_traces n' p spec) (bound_traces n' q spec)
+    | ProcCond b p q =>
+      if b then (bound_traces n' p spec) else (bound_traces n' q spec)
+    | ProcName procName =>
+      let defs := get_proc_defs spec in
+      let procBody := find_process procName defs in
+      bound_traces n' procBody spec
+    end
+  end.
+
 Fixpoint traces (p: Proc): set Trace :=
   match p with
   | Stop => [[]]
