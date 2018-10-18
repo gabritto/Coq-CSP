@@ -16,7 +16,7 @@ Definition Event: Type := string.
 Theorem Event_eq_dec: forall (x y: Event), {x = y} + {x <> y}.
 Proof.
   apply string_dec.
-Qed.
+Defined.
 
 Definition Alphabet: Type := list Event.
 
@@ -36,7 +36,7 @@ Inductive Spec: Type :=
 
 Module CSP_Syntax_Notations.
 (* CSP *)
-Notation "a -->> p" := (ProcPref a p)
+Notation "a ~> p" := (ProcPref a p)
   (at level 60, right associativity).
                       
 Notation "p [-] q" := (ProcExtChoice p q)
@@ -60,7 +60,7 @@ Check ProcName "P".
 
 Example procTest := channel ["a"; "b"],
   definitions
-    ["P" ::= ("a" -->> Stop) [-] ("b" -->> Stop);
+    ["P" ::= ("a" ~> Stop) [-] ("b" ~> Stop);
      "Q" ::= (ProcName "R" << true >> Skip) ].
 
 Check procTest.
@@ -74,15 +74,15 @@ Fixpoint extract_names (proc: Proc): list string :=
   match proc with
   | Skip => []
   | Stop => []
-  | e -->> proc'  => extract_names proc'
-  | p [-] q => extract_names p ++ extract_names q
-  | p <<_>> q => extract_names p ++ extract_names q
+  | ProcPref _ proc'  => extract_names proc'
+  | ProcExtChoice p q => extract_names p ++ extract_names q
+  | ProcCond _ p q => extract_names p ++ extract_names q
   | ProcName name => [name]
   end.
 
 Fixpoint extract_events (proc: Proc): list Event :=
   match proc with
-  | e -->> proc' => e :: extract_events proc'
+  | ProcPref e proc' => e :: extract_events proc'
   | _ => []
   end.
 
@@ -106,8 +106,6 @@ Example procs := match procTest with (SpecDef a ps) => ps end.
 Compute process_names_defined procs.
 Compute process_names_used procs.
 
-Search "distinct".
-Search "unique".
 
 Fixpoint distinct {T: Type}
   (T_eq_dec: forall (x y: T), {x = y} + {x <> y}) (l: list T): Prop :=
@@ -165,7 +163,35 @@ Module StringOT <: OrderedType.
   Definition eq_trans := @trans_eq t.
   
   Theorem lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
-  Proof. (* TODO *) Admitted.
+  Proof.
+    intros x. induction x.
+    - intros y z. intros H. intros Hyz.
+      destruct y.
+      + simpl in H. exfalso. apply H.
+      + unfold lt. destruct z.
+        * simpl in Hyz. apply Hyz.
+        * apply I.
+    - intros y z. intros H. intros Hyz. simpl.
+      destruct z.
+      + simpl in Hyz. destruct y.
+        * simpl in Hyz. apply Hyz.
+        * simpl in Hyz. apply Hyz.
+      + destruct y.
+        * simpl in H. exfalso. apply H.
+        * simpl in H. simpl in Hyz. split.
+          {
+            apply proj1 in H. apply proj1 in Hyz.
+            Search (_ < _ -> _ < _ -> _ < _).
+            apply PeanoNat.Nat.lt_trans with (m := nat_of_ascii a1).
+            - apply H.
+            - apply Hyz.
+          }
+          {
+            apply proj2 in H. apply proj2 in Hyz. apply IHx with (y := y).
+            - apply H.
+            - apply Hyz.
+          }
+  Qed.
   
   Theorem lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
   Proof. (* TODO *) Admitted.
@@ -203,7 +229,7 @@ Definition Trace: Type := list Event.
 Theorem Trace_eq_dec: forall (x y: Trace), {x = y} + {x <> y}.
 Proof.
   Search "list_eq_dec". apply list_eq_dec. apply Event_eq_dec.
-Qed.
+Defined.
 
 (* Trace and set of Traces definitions *)
 
@@ -240,42 +266,50 @@ Definition get_proc_defs (spec: Spec): list ProcDef :=
 
 (* Functional definition of the set of traces of a process*)
 
-Fixpoint bound_traces (n: nat) (proc: Proc)
-  (spec: Spec): set Trace :=
-  match n with
-  | O => [[]]
-  | S n' =>
-    match proc with
-    | Stop => [[]]
-    | Skip => [[]]
-    | ProcPref e q =>
-      let qTraces := bound_traces n' q spec in
-      let qTracesWithE := setMap (fun trace => e :: trace) qTraces in
-        setUnion [[]] qTracesWithE
-    | ProcExtChoice p q =>
-      setUnion (bound_traces n' p spec) (bound_traces n' q spec)
-    | ProcCond b p q =>
-      if b then (bound_traces n' p spec) else (bound_traces n' q spec)
-    | ProcName procName =>
-      let defs := get_proc_defs spec in
-      let procBody := find_process procName defs in
-      bound_traces n' procBody spec
-    end
+Definition TracesMap := list (string * set Trace).
+
+Fixpoint get_trace (procName: string) (tracesMap: TracesMap): set Trace :=
+  match tracesMap with
+  | [] => []
+  | (name, traces) :: tracesMap' =>
+    if string_dec procName name then traces else get_trace procName tracesMap'
   end.
 
-Fixpoint traces (p: Proc): set Trace :=
+Fixpoint build_traces (traces: TracesMap) (p: Proc): set Trace :=
   match p with
   | Stop => [[]]
   | Skip => [[]]
   | ProcPref e q =>
-    let qTraces := traces(q) in
+    let qTraces := build_traces traces q in
     let qWithA := setMap (fun trace => e :: trace) qTraces in
       setUnion [[]] qWithA
-  | ProcExtChoice p q => setUnion (traces p) (traces q)
-  | ProcCond b p q => if b then (traces p) else (traces q)
-  | _ => [[]]
-  end.    
+  | ProcExtChoice p q => setUnion (build_traces traces p) (build_traces traces q)
+  | ProcCond b p q => if b then (build_traces traces p) else (build_traces traces q)
+  | ProcName name => get_trace name traces
+  end.
 
+Check List.length.
+
+Fixpoint bound_spec_traces (n: nat) (spec: Spec): TracesMap :=
+  let defs := get_proc_defs spec in
+  let procNames := process_names_defined defs in
+  let size := List.length defs in
+  match n with
+  | O => map (fun name => (name, [])) procNames
+  | S n' =>
+    let tracesMap := bound_spec_traces n' spec in
+    map
+    (fun def =>
+      match def with (Def name proc) =>
+        (name, build_traces tracesMap proc)
+      end)
+    defs
+  end.
+
+Compute bound_spec_traces 0 procTest.
+Compute bound_spec_traces 1 procTest.
+
+(*
 Theorem traces_non_empty: forall (p: Proc),
   traces p <> empty_set Trace.
 Proof.
@@ -290,6 +324,7 @@ Proof.
     + apply IHp2.
   - simpl. apply sngTrace_not_empty. 
 Qed.
+*)
 
 (* Maybe write Prop definition of what it means to be a prefix of a list *)
 Fixpoint prefixes {T: Type} (s: list T): list (list T) :=
@@ -319,6 +354,7 @@ Proof.
   - intros HP. left. apply HP. 
 Qed.
 
+(*
 Theorem traces_prefix_closed: forall (p: Proc),
   prefix_closed (traces p).
 Proof.
@@ -338,7 +374,7 @@ Proof.
       unfold emptyTrace. simpl. left. reflexivity.
     + simpl in H0.
 Abort.
-  
+*)
   
 
 
