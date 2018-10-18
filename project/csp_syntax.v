@@ -111,7 +111,7 @@ Fixpoint distinct {T: Type}
   (T_eq_dec: forall (x y: T), {x = y} + {x <> y}) (l: list T): Prop :=
   match l with
   | [] => True
-  | t :: l' => let t_unique := In t l' in
+  | t :: l' => let t_unique := ~In t l' in
     t_unique /\ distinct T_eq_dec l'
   end.
 
@@ -261,6 +261,9 @@ Proof.
   unfold empty_set. intros H. inversion H.
 Qed.
 
+Definition get_alphabet (s: Spec): Alphabet :=
+  match s with (SpecDef a _) => a end.  
+
 Definition get_proc_defs (spec: Spec): list ProcDef :=
   match spec with (SpecDef _ procDefs) => procDefs end.
 
@@ -295,7 +298,7 @@ Fixpoint bound_spec_traces (n: nat) (spec: Spec): TracesMap :=
   let procNames := process_names_defined defs in
   let size := List.length defs in
   match n with
-  | O => map (fun name => (name, [])) procNames
+  | O => map (fun name => (name, [[]])) procNames
   | S n' =>
     let tracesMap := bound_spec_traces n' spec in
     map
@@ -306,8 +309,87 @@ Fixpoint bound_spec_traces (n: nat) (spec: Spec): TracesMap :=
     defs
   end.
 
+(* Tests *)
+
+Print procTest.
+
 Compute bound_spec_traces 0 procTest.
 Compute bound_spec_traces 1 procTest.
+Compute bound_spec_traces 2 procTest.
+
+Example around := channel ["up"; "down"],
+  definitions
+  ["around" ::=
+    ("up" ~> ProcName "around") [-]
+    ("down" ~> ProcName "around")].
+Print well_formed_spec.    
+Compute well_formed_spec around.
+
+Example aroundDefs := get_proc_defs around.
+Compute process_names_defined aroundDefs.
+Compute distinct string_dec (process_names_defined aroundDefs).
+
+Compute bound_spec_traces 0 around.
+Compute bound_spec_traces 1 around.
+Compute bound_spec_traces 2 around.
+Compute bound_spec_traces 3 around.
+
+Definition DefInSpec (def: ProcDef) (s: Spec): Prop :=
+  let defs := get_proc_defs s in
+  In def defs.
+
+Definition EventInSpec (e: Event) (s: Spec): Prop :=
+  let alpha := get_alphabet s in
+  In e alpha.
+
+Inductive TraceType: Type :=
+  | EmptyTrace
+  | ConcatTrace: Event -> TraceType -> TraceType. 
+
+(* Inductive traces *)
+Inductive IsProcTrace: Proc -> Spec -> TraceType -> Prop :=
+  | AllEmptyTrace: forall (p: Proc) (s: Spec),
+      IsProcTrace p s EmptyTrace
+  | ExtChoiceTrace: forall (p q: Proc) (s: Spec) (t: TraceType),
+      IsProcTrace p s t \/ IsProcTrace q s t ->
+      IsProcTrace (ProcExtChoice p q) s t
+  | PrefTrace: forall (p: Proc) (s: Spec) (t: TraceType) (e: Event),
+      IsProcTrace p s t -> EventInSpec e s ->
+      IsProcTrace (ProcPref e p) s (ConcatTrace e t)
+  | NameTrace: forall (name: string) (p: Proc) (s: Spec) (t: TraceType),
+      IsProcTrace p s t -> DefInSpec (Def name p) s ->
+      IsProcTrace (ProcName name) s t
+  | PrefCondFalse: forall (p q: Proc) (s: Spec) (t: TraceType) (b: bool),
+      b = false ->
+      IsProcTrace p s t ->
+      IsProcTrace (ProcCond b p q) s t
+  | ProcCondTrue: forall (p q: Proc) (s: Spec) (t: TraceType) (b: bool),
+      b = true ->
+      IsProcTrace q s t ->
+      IsProcTrace (ProcCond b p q) s t.
+
+
+(*TODO: More practical definition of NameTrace *)
+Example traceAround:
+  IsProcTrace
+    (("up" ~> ProcName "around") [-] ("down" ~> ProcName "around"))
+    around
+    (ConcatTrace "up" (ConcatTrace "down" EmptyTrace)).
+Proof.
+  apply ExtChoiceTrace.
+  left. apply PrefTrace.
+  {
+    try apply NameTrace. unfold around.
+    apply NameTrace with (p := ("up" ~> ProcName "around") [-] ("down" ~> ProcName "around")).
+    - apply ExtChoiceTrace. right. apply PrefTrace.
+      + apply AllEmptyTrace.
+      + unfold EventInSpec. simpl. right. left. reflexivity.
+    - simpl. unfold DefInSpec. simpl. left. reflexivity.
+  }
+  {
+    - unfold EventInSpec. simpl. left. reflexivity. 
+  }
+Qed.
 
 (*
 Theorem traces_non_empty: forall (p: Proc),
@@ -325,6 +407,8 @@ Proof.
   - simpl. apply sngTrace_not_empty. 
 Qed.
 *)
+
+
 
 (* Maybe write Prop definition of what it means to be a prefix of a list *)
 Fixpoint prefixes {T: Type} (s: list T): list (list T) :=

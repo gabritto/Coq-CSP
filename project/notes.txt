@@ -8,38 +8,28 @@ TODO:
 - Prove algebra laws within models
 
 Questions:
-- Define or find a better set module which wraps over lists and with a better
-  way to handle decidability (maybe using module parameters)
-- Conservative, static approach to analysing recursion
-  (in the future, boolean expressions may contain event variables).
-- How to define recursive specs?
-  (graphs? e.g. https://github.com/coq-contribs/graph-basics/blob/master/Graphs.v,
-  https://github.com/coq-contribs/graph-basics)
-v- How should the set of Events be represented and included in the definitions?
-    (e.g. Type or Module parameter (or implicit argument?))
-v- How should recursion be modelled? (p. 20)
-l- What is Hypothesis and Section in Coq? (as in Coq.Lists.ListSet)
-l- Coq lazy eval - or how to define Y combinator (and for a vector of equations)
 
 Ideias:
 - considerar só eventos (sem distinção de entrada/saída)
 - teorema: processo sem laços -> traces finito de tamanho limitado
 - semântica funcional traces (com limitante no tamanho dos traces)
 
-v- Evento: uma string (por enquanto, não considerar tau)
-v- Name (o nome de um processo): uma string também
-v- Outro tipo (defProc) que associa um nome a um corpo de processo
-v- Outro tipo que representa o alfabeto (i.e., os eventos declarados -- lista de strings)
+- wrap event in constructor to be able to define special events (skip, tau)
+    |- limit constructor to take only strings
+    
+TODO:
+- definição lógica de traces
+    |- começar com um trace só, depois definir conjunto de traces
+    |- equivalência
+    
+- se o processo não tem recursão, existe n tal que bound_traces calcula todos os traces
+    P = a -> Stop
+    {[], [a]}
+    
+- provar corretude funcional usando a definição lógica
 
-v- Outro tipo que representa uma especificação considerando um alfabeto e uma lista de defProc
+- depois ir pra semântica operacional 
 
-v- Criar uma função para verificar se uma especificação é bem formada
-  (não podem existir eventos com mesmo nome)
-  (não podem existir defProc com mesmo nome)
-  (todo evento e nome de processo referenciado, precisa ter sido declarado)
-v- Criar uma notação sintática para representar isto tudo
-  Por exemplo: channel [b,c], definitions [P = (c -> STOP [] b -> STOP), Q = ...]
-- Criar uma função para retornar todos os traces até um tamanho x
 - Teorema: se um processo não tem recursão, existe um x, tal que não existem traces maiores do que x.
   (laço: lembrar que pode ser recursão mútua)
 
