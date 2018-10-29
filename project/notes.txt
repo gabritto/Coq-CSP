@@ -37,3 +37,9 @@ http://www.cs.swan.ac.uk/csr591/Papers/isobe05.pdf
 https://link.springer.com/content/pdf/10.1007%2Fs00165-018-0453-7.pdf
 
 
+TODO código:
+- separar traces no arquivo de traces
+- separar definições e estruturas auxiliares em outro arquivo (lista/map baseado em lista)
+- criar tática pra usar inversion em um par e depois dar clear na hipótese
+
+
