@@ -287,7 +287,17 @@ Definition get_proc_defs (spec: Spec): list ProcDef :=
 
 Definition TracesMap := list (string * set Trace).
 
-(* auxiliar map definition *)
+(* auxiliar definitions *)
+Theorem or_false: forall (P: Prop), P \/ False <-> P.
+Proof.
+  intros P.
+  split.
+  - intros. inversion H.
+    + apply H0.
+    + inversion H0.
+  - intros HP. left. apply HP. 
+Qed.
+
 Fixpoint find_key {A B: Type}
   (A_eq_dec: forall x y : A, {x = y} + {x <> y})
   (l: list (A*B)) (key: A): option B :=
@@ -540,25 +550,46 @@ Proof.
       * inversion H1.
       * simpl. apply H0'.
     + apply H0.
-  - intros. apply NameTrace with (p := procBody).
+  - intros.
+    assert (Hwf := H).
+    apply NameTrace with (p := procBody).
       * induction procBody.
         {
-          simpl in H1. unfold DefInSpec in H0.
+          unfold DefInSpec in H0.
+          assert (Hdef := H0).
           apply in_map with (f := (fun def : ProcDef =>
            match def with
            | name ::= proc =>
                (name, build_traces (bound_spec_traces n s) proc)
            end)) in H0. simpl in H0.
-          simpl in H1. apply distinct_traces_map with (n := n) in H.
+          simpl in H1.
+          apply distinct_traces_map with (n := n) in H.
           apply get_trace_proc_name with (procName := procName)
           (traceSet := traceSet) in H.
           subst.
           simpl in H0.
-          (* TODO: bring back DefInSpec to use with in_map in H0 *)
-          apply IHn in
-          apply get_trace_proc_name with 
+          apply get_trace_proc_name in H0.
+          rewrite H0 in H1.
+          rewrite -> H1 in H2.
+          simpl in H2. rewrite or_false in H2.
+          subst.
+          - apply AllEmptyTrace.
+          - assert ((bound_spec_traces (S n) s) = (map
+             (fun def : ProcDef =>
+              match def with
+              | name ::= proc =>
+                  (name, build_traces (bound_spec_traces n s) proc)
+              end) (get_proc_defs s))).
+            {
+              simpl. reflexivity.
+            }
+            rewrite <- H. apply distinct_traces_map.
+            apply Hwf.
+          -
         } 
 Admitted.
+
+Lemma get_trace_in_trace
 
 (*
 Theorem traces_non_empty: forall (p: Proc),
@@ -597,15 +628,6 @@ Definition prefix_closed {T: Type} (tSet: set (list T)): Prop :=
 
 Check prefix_closed.
 
-Theorem or_false: forall (P: Prop), P \/ False <-> P.
-Proof.
-  intros P.
-  split.
-  - intros. inversion H.
-    + apply H0.
-    + inversion H0.
-  - intros HP. left. apply HP. 
-Qed.
 
 (*
 Theorem traces_prefix_closed: forall (p: Proc),
