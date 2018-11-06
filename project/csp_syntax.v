@@ -1,4 +1,3 @@
-Require Import Coq.Lists.ListSet.
 Require Import Coq.Lists.List.
 Require Import Coq.Setoids.Setoid.
 Require Import Coq.Strings.String.
@@ -82,8 +81,12 @@ Fixpoint extract_names (proc: Proc): list string :=
 
 Fixpoint extract_events (proc: Proc): list Event :=
   match proc with
-  | ProcPref e proc' => e :: extract_events proc'
-  | _ => []
+  | Stop => []
+  | Skip => []
+  | ProcExtChoice p q => (extract_events p) ++ (extract_events q)
+  | ProcPref e p => e :: (extract_events p)
+  | ProcCond b p q => (extract_events p) ++ (extract_events q)
+  | ProcName s => []
   end.
 
 Definition events_used (procs: list ProcDef): list Event :=
@@ -231,15 +234,7 @@ Module StringOT <: OrderedType.
   
 End StringOT.
 
-
-(* Graph cycle *)
-(*TODO: DFS solution*)
-
-(* Define non-recursive spec prop *)
-
-
 (* Traces *)
-(* TODO: define traces function up to a maximum size *)
 Definition Trace: Type := list Event.
 
 Theorem Trace_eq_dec: forall (x y: Trace), {x = y} + {x <> y}.
@@ -251,32 +246,6 @@ Defined.
 
 Definition emptyTrace: Trace := nil.
 
-Definition setAdd := set_add Trace_eq_dec.
-
-Definition sngTrace (e: Trace) := setAdd e (empty_set _).
-
-Definition setUnion := set_union Trace_eq_dec.
-
-Definition setMap := @set_map Trace Trace Trace_eq_dec.
-
-Lemma set_union_not_empty: forall {T: Type}
-  {T_eq_dec: forall (x y: T), {x = y} + {x <> y}}
-  (s t: set T),
-  s <> empty_set T -> set_union T_eq_dec s t <> empty_set T.
-Proof.
-  intros T eq_dec s t.
-  destruct t as [ |b t'].
-  - unfold empty_set. intros H. simpl. apply H.
-  - intros H. simpl. apply set_add_not_empty.
-Qed.
-
-Lemma sngTrace_not_empty: forall (t: Trace), [t] <> empty_set Trace.
-Proof.
-  intros t.
-  unfold sngTrace.
-  unfold empty_set. intros H. inversion H.
-Qed.
-
 Definition get_alphabet (s: Spec): Alphabet :=
   match s with (SpecDef a _) => a end.  
 
@@ -285,7 +254,7 @@ Definition get_proc_defs (spec: Spec): list ProcDef :=
 
 (* Functional definition of the set of traces of a process*)
 
-Definition TracesMap := list (string * set Trace).
+Definition TracesMap := list (string * list Trace).
 
 (* auxiliar definitions *)
 Theorem or_false: forall (P: Prop), P \/ False <-> P.
@@ -307,22 +276,23 @@ Fixpoint find_key {A B: Type}
     if A_eq_dec a key then Some b else find_key A_eq_dec l' key
   end.  
     
-Definition get_trace (procName: string) (tracesMap: TracesMap): set Trace :=
+Definition get_trace (procName: string)
+  (tracesMap: TracesMap): list Trace :=
   let optTraces := find_key string_dec tracesMap procName in
   match optTraces with
   | None => []
   | Some traces => traces
   end.
 
-Fixpoint build_traces (traces: TracesMap) (p: Proc): set Trace :=
+Fixpoint build_traces (traces: TracesMap) (p: Proc): list Trace :=
   match p with
   | Stop => [[]]
   | Skip => [[]]
   | ProcPref e q =>
     let qTraces := build_traces traces q in
-    let qWithA := setMap (fun trace => e :: trace) qTraces in
-      setUnion [[]] qWithA
-  | ProcExtChoice p q => setUnion (build_traces traces p) (build_traces traces q)
+    let qWithA := map (fun trace => e :: trace) qTraces in
+      [[]] ++ qWithA
+  | ProcExtChoice p q => (build_traces traces p) ++ (build_traces traces q)
   | ProcCond b p q => if b then (build_traces traces p) else (build_traces traces q)
   | ProcName name => get_trace name traces
   end.
@@ -393,13 +363,13 @@ Inductive IsProcTrace: Proc -> Spec -> Trace -> Prop :=
   | NameTrace: forall (name: string) (p: Proc) (s: Spec) (t: Trace),
       IsProcTrace p s t -> DefInSpec (Def name p) s ->
       IsProcTrace (ProcName name) s t
-  | PrefCondFalse: forall (p q: Proc) (s: Spec) (t: Trace) (b: bool),
+  | CondFalse: forall (p q: Proc) (s: Spec) (t: Trace) (b: bool),
       b = false ->
-      IsProcTrace p s t ->
-      IsProcTrace (ProcCond b p q) s t
-  | ProcCondTrue: forall (p q: Proc) (s: Spec) (t: Trace) (b: bool),
-      b = true ->
       IsProcTrace q s t ->
+      IsProcTrace (ProcCond b p q) s t
+  | CondTrue: forall (p q: Proc) (s: Spec) (t: Trace) (b: bool),
+      b = true ->
+      IsProcTrace p s t ->
       IsProcTrace (ProcCond b p q) s t.
 
 
@@ -498,7 +468,7 @@ Proof.
 Admitted.
 
 Lemma get_trace_proc_name: forall (procName: string)
-  (traceSet: set Trace) (tracesMap: TracesMap),
+  (traceSet: list Trace) (tracesMap: TracesMap),
   distinct_proc_names tracesMap ->
   In (procName, traceSet) tracesMap ->
   get_trace procName tracesMap = traceSet.
@@ -515,7 +485,7 @@ Proof.
     + unfold distinct_proc_names in H.
       destruct (string_dec s procName).
       * simpl in H.
-        apply in_map with (f := (fun nameTrace : string * set Trace =>
+        apply in_map with (f := (fun nameTrace : string * list Trace =>
           let (name, _) := nameTrace in name)) in H0. 
         subst. apply proj1 in H. unfold not in H. exfalso.
         apply H. apply H0.
@@ -528,7 +498,7 @@ Proof.
 Qed.
 
 Lemma get_trace_then_in_trace: forall (procName: string) 
-  (traceSet: set Trace) (tracesMap: TracesMap),
+  (traceSet: list Trace) (tracesMap: TracesMap),
   get_trace procName tracesMap = traceSet ->
   traceSet <> [] ->
   In (procName, traceSet) tracesMap.
@@ -546,157 +516,333 @@ Qed.
 
 
 Theorem bound_spec_traces_correctness: forall (s: Spec) (n: nat)
-  (procName: string) (procBody: Proc) (trace: Trace) (traceSet: set Trace),
+  (procName: string) (procBody: Proc) (trace: Trace)
+  (traceSet: list Trace),
   well_formed_spec s -> 
   DefInSpec (Def procName procBody) s ->
   traceSet = get_trace procName (bound_spec_traces n s) ->
-  In trace traceSet -> IsProcTrace (ProcName procName) s trace.
+  In trace traceSet -> IsProcTrace procBody s trace.
 Proof.
-  intros. generalize dependent traceSet. induction n.
+  Print bound_spec_traces.
+  intros. generalize dependent traceSet.
+  generalize dependent trace. induction n.
   - simpl in H0.
     intros.
-    apply NameTrace with (p := procBody).
-    + simpl in H1. assert (H0' := H0). apply def_in_get_proc_def in H0.
-      Print get_trace. Check (process_names_defined (get_proc_defs s)).
-      Check in_map.
-      Print nil.
-      apply in_map with (f := (fun name : string => (name, [@nil Event]))) (l := (process_names_defined (get_proc_defs s))) in H0.
-      apply get_empty_trace_well_formed_spec with (procName := procName) (procBody := procBody) in H.
-      rewrite H in H1. subst. inversion H2.
-      * rewrite <- H1. apply AllEmptyTrace.
-      * inversion H1.
-      * simpl. apply H0'.
-    + apply H0.
-  - intros.
-    assert (Hwf := H).
-    apply NameTrace with (p := procBody).
-      * induction procBody.
+    simpl in H1. assert (H0' := H0). apply def_in_get_proc_def in H0.
+    Print get_trace. Check (process_names_defined (get_proc_defs s)).
+    Check in_map.
+    Print nil.
+    apply in_map with (f := (fun name : string => (name, [@nil Event]))) (l := (process_names_defined (get_proc_defs s))) in H0.
+    apply get_empty_trace_well_formed_spec with (procName := procName) (procBody := procBody) in H.
+    rewrite H in H1. subst. inversion H2.
+    + rewrite <- H1. apply AllEmptyTrace.
+    + inversion H1.
+    + simpl. apply H0'.
+  - assert (Hwf := H).
+    induction procBody.
+    { (* Begin Stop *)
+      intros.
+      unfold DefInSpec in H0.
+      assert (Hdef := H0).
+      apply in_map with (f := (fun def : ProcDef =>
+       match def with
+       | name ::= proc =>
+           (name, build_traces (bound_spec_traces n s) proc)
+       end)) in H0. simpl in H0.
+      simpl in H1.
+      apply distinct_traces_map with (n := S n) in H.
+      apply get_trace_proc_name with (procName := procName)
+      (traceSet := traceSet) in H.
+      subst.
+      simpl in H0.
+      apply get_trace_proc_name in H0.
+      rewrite H0 in H1.
+      rewrite -> H1 in H2.
+      simpl in H2. rewrite or_false in H2.
+      subst.
+      - apply AllEmptyTrace.
+      - assert ((bound_spec_traces (S n) s) = (map
+         (fun def : ProcDef =>
+          match def with
+          | name ::= proc =>
+              (name, build_traces (bound_spec_traces n s) proc)
+          end) (get_proc_defs s))).
         {
-          unfold DefInSpec in H0.
-          assert (Hdef := H0).
-          apply in_map with (f := (fun def : ProcDef =>
-           match def with
-           | name ::= proc =>
-               (name, build_traces (bound_spec_traces n s) proc)
-           end)) in H0. simpl in H0.
-          simpl in H1.
-          apply distinct_traces_map with (n := S n) in H.
-          apply get_trace_proc_name with (procName := procName)
-          (traceSet := traceSet) in H.
-          subst.
-          simpl in H0.
-          apply get_trace_proc_name in H0.
-          rewrite H0 in H1.
-          rewrite -> H1 in H2.
-          simpl in H2. rewrite or_false in H2.
-          subst.
-          - apply AllEmptyTrace.
-          - assert ((bound_spec_traces (S n) s) = (map
-             (fun def : ProcDef =>
-              match def with
-              | name ::= proc =>
-                  (name, build_traces (bound_spec_traces n s) proc)
-              end) (get_proc_defs s))).
-            {
-              simpl. reflexivity.
-            }
-            rewrite <- H. apply distinct_traces_map.
-            apply Hwf.
-          - assert ((bound_spec_traces (S n) s) = (map
-             (fun def : ProcDef =>
-              match def with
-              | name ::= proc =>
-                  (name, build_traces (bound_spec_traces n s) proc)
-              end) (get_proc_defs s))).
-            {
-              simpl. reflexivity.
-            }
-            rewrite <- H3 in H0.
-            apply get_trace_then_in_trace.
-            + symmetry. apply H1.
-            + apply get_trace_proc_name with (procName := procName)(traceSet := [[]]) in H.
-              * subst. rewrite <- H3. unfold not. intros.
-                rewrite -> H in H1. inversion H1.
-              * apply H0.
+          simpl. reflexivity.
         }
+        rewrite <- H. apply distinct_traces_map.
+        apply Hwf.
+      - assert ((bound_spec_traces (S n) s) = (map
+         (fun def : ProcDef =>
+          match def with
+          | name ::= proc =>
+              (name, build_traces (bound_spec_traces n s) proc)
+          end) (get_proc_defs s))).
         {
-          unfold DefInSpec in H0.
-          assert (Hdef := H0).
-          apply in_map with (f := (fun def : ProcDef =>
-           match def with
-           | name ::= proc =>
-               (name, build_traces (bound_spec_traces n s) proc)
-           end)) in H0. simpl in H0.
-          simpl in H1.
-          apply distinct_traces_map with (n := S n) in H.
-          apply get_trace_proc_name with (procName := procName)
-          (traceSet := traceSet) in H.
-          subst.
-          simpl in H0.
-          apply get_trace_proc_name in H0.
-          rewrite H0 in H1.
-          rewrite -> H1 in H2.
-          simpl in H2. rewrite or_false in H2.
-          subst.
-          - apply AllEmptyTrace.
-          - assert ((bound_spec_traces (S n) s) = (map
-             (fun def : ProcDef =>
-              match def with
-              | name ::= proc =>
-                  (name, build_traces (bound_spec_traces n s) proc)
-              end) (get_proc_defs s))).
-            {
-              simpl. reflexivity.
-            }
-            rewrite <- H. apply distinct_traces_map.
-            apply Hwf.
-          - assert ((bound_spec_traces (S n) s) = (map
-             (fun def : ProcDef =>
-              match def with
-              | name ::= proc =>
-                  (name, build_traces (bound_spec_traces n s) proc)
-              end) (get_proc_defs s))).
-            {
-              simpl. reflexivity.
-            }
-            rewrite <- H3 in H0.
-            apply get_trace_then_in_trace.
-            + symmetry. apply H1.
-            + apply get_trace_proc_name with (procName := procName)(traceSet := [[]]) in H.
-              * subst. rewrite <- H3. unfold not. intros.
-                rewrite -> H in H1. inversion H1.
-              * apply H0.
-        } 
-        {
-          simpl in H1.
-          unfold DefInSpec in H0.
-          apply in_map with (f :=
-          (fun def : ProcDef =>
-           match def with
-           | name ::= proc =>
-               (name, build_traces (bound_spec_traces n s) proc)
-           end)) in H0.
-          simpl in H0.
+          simpl. reflexivity.
         }
+        rewrite <- H3 in H0.
+        apply get_trace_then_in_trace.
+        + symmetry. apply H1.
+        + apply get_trace_proc_name with (procName := procName)(traceSet := [[]]) in H.
+          * subst. rewrite <- H3. unfold not. intros.
+            rewrite -> H in H1. inversion H1.
+          * apply H0.
+    } (* End Stop *)
+    { (* Begin Skip *)
+      intros.
+      unfold DefInSpec in H0.
+      assert (Hdef := H0).
+      apply in_map with (f := (fun def : ProcDef =>
+       match def with
+       | name ::= proc =>
+           (name, build_traces (bound_spec_traces n s) proc)
+       end)) in H0. simpl in H0.
+      simpl in H1.
+      apply distinct_traces_map with (n := S n) in H.
+      apply get_trace_proc_name with (procName := procName)
+      (traceSet := traceSet) in H.
+      subst.
+      simpl in H0.
+      apply get_trace_proc_name in H0.
+      rewrite H0 in H1.
+      rewrite -> H1 in H2.
+      simpl in H2. rewrite or_false in H2.
+      subst.
+      - apply AllEmptyTrace.
+      - assert ((bound_spec_traces (S n) s) = (map
+         (fun def : ProcDef =>
+          match def with
+          | name ::= proc =>
+              (name, build_traces (bound_spec_traces n s) proc)
+          end) (get_proc_defs s))).
+        {
+          simpl. reflexivity.
+        }
+        rewrite <- H. apply distinct_traces_map.
+        apply Hwf.
+      - assert ((bound_spec_traces (S n) s) = (map
+         (fun def : ProcDef =>
+          match def with
+          | name ::= proc =>
+              (name, build_traces (bound_spec_traces n s) proc)
+          end) (get_proc_defs s))).
+        {
+          simpl. reflexivity.
+        }
+        rewrite <- H3 in H0.
+        apply get_trace_then_in_trace.
+        + symmetry. apply H1.
+        + apply get_trace_proc_name with (procName := procName)(traceSet := [[]]) in H.
+          * subst. rewrite <- H3. unfold not. intros.
+            rewrite -> H in H1. inversion H1.
+          * apply H0.
+    } (* End Skip *) 
+    { (* Begin Prefix *)
+      assert (Hdef := H0).
+      unfold DefInSpec in H0.
+      apply in_map with (f := (fun def : ProcDef =>
+       match def with
+       | name ::= proc =>
+           (name, build_traces (bound_spec_traces n s) proc)
+       end)) in H0. simpl in H0.
+    } (* End Prefix *)
 Admitted.
 
-(*
-Theorem traces_non_empty: forall (p: Proc),
-  traces p <> empty_set Trace.
-Proof.
-  intros p. induction p.
-  - simpl. unfold empty_set. intros H. inversion H.
-  - simpl. unfold empty_set. intros H. inversion H.
-  - simpl. unfold setUnion. simpl. Search (_ <> empty_set).
-    apply set_union_not_empty. apply sngTrace_not_empty.
-  - simpl. apply set_union_not_empty. apply IHp1.
-  - simpl. destruct b.
-    + apply IHp1.
-    + apply IHp2.
-  - simpl. apply sngTrace_not_empty. 
-Qed.
-*)
+Print build_traces.
 
+Lemma not_empty_list_then_in:
+  forall {A: Type} (l: list A),
+  l <> [] -> exists a, In a l.
+Proof.
+  intros. destruct l.
+  - unfold not in H. exfalso. apply H. reflexivity.
+  - exists a. simpl. left. reflexivity.
+Qed.
+
+(* Add hypothesis for get_traces correctness *)
+Theorem build_traces_correctness:
+  forall (proc: Proc) (tracesMap: TracesMap) (spec: Spec) (trace: Trace) (traceSet: list Trace),
+  well_formed_spec spec ->
+  (forall (event: Event), In event (extract_events proc) -> EventInSpec event spec) ->
+  traceSet = build_traces tracesMap proc ->
+  In trace traceSet ->
+  IsProcTrace proc spec trace.
+Proof.
+  Print well_formed_spec.
+  induction proc.
+  - intros. simpl in H1. subst. unfold In in H2.
+    rewrite or_false in H2.
+    subst. apply AllEmptyTrace.
+  - intros. simpl in H1. subst. unfold In in H2.
+    rewrite or_false in H2.
+    subst. apply AllEmptyTrace.
+  - intros. simpl in H1.
+    destruct trace.
+    + apply AllEmptyTrace.
+    (* + apply PrefTrace. *)
+    Print PrefTrace.
+    + destruct (string_dec e0 e).
+      * subst.
+        intros.
+        apply PrefTrace.
+        {
+          apply IHproc with (tracesMap := tracesMap)
+            (trace := trace)
+            (traceSet := (build_traces tracesMap proc)).
+          - apply H.
+          - simpl in H0.
+            intros.
+            apply H0.
+            right.
+            apply H1.
+          - reflexivity.
+          - simpl in H2.
+            inversion H2.
+            + inversion H1.
+            + apply in_map_iff in H1.
+              destruct H1.
+              destruct H1.
+              inversion H1.
+              clear H1.
+              subst. apply H3. 
+        }
+        {
+          apply H0.
+          simpl. left. reflexivity.
+        }
+        * unfold not in n.
+          simpl.
+          subst.
+          simpl in H2.
+          destruct H2.
+          inversion H1.
+          apply in_map_iff in H1.
+          destruct H1. apply proj1 in H1.
+          inversion H1. exfalso. apply n. symmetry. apply H3.
+  - intros. apply ExtChoiceTrace.
+    + simpl in H1. subst.
+      apply in_app_or in H2.
+      destruct H2.
+      * left.
+        apply IHproc1 with (tracesMap := tracesMap) (traceSet := (build_traces tracesMap proc1)).
+        {
+          apply H.
+        }
+        {
+          simpl in H0.
+          intros.
+          apply H0.
+          apply in_or_app.
+          left. apply H2.
+        }
+        {
+          reflexivity.
+        }
+        {
+          apply H1.
+        }
+      * right.
+        apply IHproc2 with (tracesMap := tracesMap) (traceSet := (build_traces tracesMap proc2)).
+        {
+          apply H.
+        }
+        {
+          simpl in H0.
+          intros.
+          apply H0.
+          apply in_or_app.
+          right. apply H2.
+        }
+        {
+          reflexivity.
+        }
+        {
+          apply H1.
+        }
+  - intros. destruct b.
+    + apply CondTrue.
+      * reflexivity.
+      * apply IHproc1 with (tracesMap := tracesMap)
+          (traceSet := build_traces tracesMap proc1).
+        {
+          apply H.
+        }
+        {
+          simpl in H0. intros.
+          apply H0. apply in_or_app.
+          left. apply H3.
+        }
+        {
+          reflexivity.
+        }
+        { 
+          simpl in H1. subst. apply H2.
+        }
+    + simpl. apply CondFalse.
+      * reflexivity.
+      * apply IHproc2 with (tracesMap := tracesMap)
+          (traceSet := build_traces tracesMap proc2).
+        {
+          apply H.
+        }
+        {
+          simpl in H0. intros.
+          apply H0. apply in_or_app.
+          right. apply H3.
+        }
+        {
+          reflexivity.
+        }
+        { 
+          simpl in H1. subst. apply H2.
+        }
+  - intros.
+    simpl in H1.
+    (*
+      TODO: Add hypothesis to fulfill ProcName case.
+      This should look like:
+      forall (s: string),
+        get_trace s tracesMap ->
+        IsProcTrace (ProcName s) spec trace
+      Then this theorem can be used with the inductive
+       hypothesis when proving bound_spec_traces_correctness. 
+    *)
+    Print IsProcTrace. apply NameTrace.
+Qed.
+
+Lemma well_formed_not_empty_trace:
+  forall (spec: Spec) (proc: Proc) (tracesMap: TracesMap),
+  well_formed_spec spec ->
+  (* proc != ProcName *)
+  (build_traces tracesMap proc) <> [].
+Proof.
+  intro. induction proc.
+  - intros. simpl. unfold not. intros.
+    inversion H0.
+  - intros. simpl. unfold not. intros.
+    inversion H0.
+  - intros. simpl. unfold not. intros.
+    unfold setUnion in H0. unfold set_union in H0.
+    destruct (setMap (fun trace : Trace => e :: trace)
+          (build_traces tracesMap proc)).
+    + inversion H0.
+    + simpl in H0. apply set_add_not_empty in H0. apply H0.
+  - intros. simpl. unfold setUnion. apply set_union_not_empty.
+    apply IHproc1 with (tracesMap := tracesMap) in H.
+    apply H.
+  - intros. simpl. destruct b.
+    + apply IHproc1 with (tracesMap := tracesMap) in H.
+      apply H.
+    + apply IHproc2 with (tracesMap := tracesMap) in H.
+      apply H.
+  - intros.
+    simpl.
+    unfold well_formed_spec in H.
+    destruct spec.
+Qed.
+
+(*TODO: change correctness to include both functions (since they call each other *)
 
 
 (* Maybe write Prop definition of what it means to be a prefix of a list *)
