@@ -857,10 +857,9 @@ Proof.
 Admitted.
 
 Theorem traces_correctness:
-forall (spec: Spec) (proc: Proc)
-  (n: nat) (trace: Trace),
+forall (spec: Spec) (n: nat),  
   well_formed_spec spec ->
-  (
+  (forall (proc: Proc) (trace: Trace),
   incl
     (extract_names proc)
     (process_names_defined (get_spec_defs spec)) ->
@@ -872,13 +871,175 @@ forall (spec: Spec) (proc: Proc)
     (build_traces (bound_spec_traces n spec) proc) ->
     IsProcTrace proc spec trace
   ) /\
-  ( exists (name: string), proc = ProcName name ->
-    exists (procBody: Proc), DefInSpec (name ::= procBody) spec ->
+  (
+    forall (proc: Proc) (name: string) (procBody: Proc) (trace: Trace),
+    proc = ProcName name ->
+    DefInSpec (name ::= procBody) spec ->
     In trace (get_trace name (bound_spec_traces n spec)) ->
     IsProcTrace procBody spec trace
   ).
 Proof.
-  intro spec.
+  intros.
+  induction n.
+  { admit. }
+  {
+    split.
+    {
+      induction proc.
+      { admit. } { admit. } { admit. } { admit. }
+      {
+        intros.
+        destruct b.
+        {
+          apply CondTrue.
+          reflexivity.
+          apply IHproc1.
+          {
+            simpl in H0.
+          }
+        }
+      }
+      {
+        intros.
+        destruct IHn.
+        simpl in H2.
+        simpl in H0. unfold incl in H0.
+        simpl in H0.
+        assert (s = s). { reflexivity. }
+        rewrite <- or_false in H5.
+        apply H0 in H5.
+        unfold process_names_defined in H5.
+        unfold get_spec_defs in H5.
+        apply in_map_iff in H5.
+        destruct H5.
+        destruct x.
+        destruct H5.
+        subst.
+        destruct spec.
+        apply NameTrace with (p := p).
+        {
+          unfold get_proc_defs in H2.
+          assert (Hdf := H6).
+          apply in_map
+            with (f := (fun def : ProcDef =>
+              match def with
+              | name ::= proc => (name, build_traces (bound_spec_traces n (channel a, definitions l)) proc)
+              end))
+            in H6.
+          Search "get_trace_proc_name".
+          assert (Hwf := H).
+          apply distinct_traces_map with (n := S n) in H.
+          apply get_trace_proc_name
+            with (procName := s) (traceSet := build_traces (bound_spec_traces n (channel a, definitions l)) p)
+            in H.
+          simpl in H. rewrite -> H in H2.
+          2: simpl. 2: apply H6.
+          apply H3.
+          {
+            unfold well_formed_spec in Hwf.
+            apply proj2 in Hwf.
+            apply proj1 in Hwf.
+            unfold process_names_used in Hwf.
+            simpl.
+            unfold incl in Hwf.
+            unfold incl.
+            intros.
+            apply Hwf.
+            rewrite in_flat_map.
+            exists (s ::= p).
+            split.
+            - apply Hdf.
+            - apply H5.
+          }
+          {
+            unfold well_formed_spec in Hwf.
+            apply proj2 in Hwf.
+            apply proj2 in Hwf.
+            apply proj2 in Hwf.
+            unfold events_used in Hwf.
+            simpl.
+            unfold incl in Hwf.
+            unfold incl.
+            intros.
+            apply Hwf.
+            rewrite in_flat_map.
+            exists (s ::= p).
+            split.
+            - apply Hdf.
+            - apply H5.
+          }
+          {
+            apply H2.
+          }
+        }
+        {
+          unfold DefInSpec. simpl. apply H6.
+        }
+      }
+    }
+    {
+      intros.
+      simpl in H2.
+      destruct IHn.
+      apply H3.
+      {
+        assert (Hwf := H).
+        unfold well_formed_spec in Hwf.
+        destruct spec.
+        apply proj2 in Hwf.
+        apply proj1 in Hwf.
+        unfold process_names_used in Hwf.
+        simpl.
+        unfold incl in Hwf.
+        unfold incl.
+        intros.
+        apply Hwf.
+        rewrite in_flat_map.
+        exists (name ::= procBody).
+        split.
+        - apply H1.
+        - apply H5.
+      }
+      {
+        assert (Hwf := H).
+        unfold well_formed_spec in Hwf.
+        destruct spec.
+        apply proj2 in Hwf.
+        apply proj2 in Hwf.
+        apply proj2 in Hwf.
+        unfold events_used in Hwf.
+        simpl.
+        unfold incl in Hwf.
+        unfold incl.
+        intros.
+        apply Hwf.
+        rewrite in_flat_map.
+        exists (name ::= procBody).
+        split.
+        - apply H1.
+        - apply H5..
+      }
+      {
+        unfold DefInSpec in H1.
+        apply in_map
+          with (f := (fun def : ProcDef =>
+              match def with
+              | name ::= proc => (name, build_traces (bound_spec_traces n spec) proc)
+              end))
+          in H1.
+        assert (Hwf := H).
+        apply distinct_traces_map with (n := S n) in H.
+        simpl in H.
+        apply get_trace_proc_name
+          with (procName := name) (traceSet := build_traces (bound_spec_traces n spec) procBody)
+          in H.
+        rewrite -> H in H2.
+        - apply H2.
+        - apply H1.
+      }
+    }
+  }
+  (*
   induction proc.
   (* Stop *)
   - intros.
@@ -1317,7 +1478,6 @@ Proof.
         intros.
         destruct IHn.
         simpl in H2.
-        eapply NameTrace.
         simpl in H0. unfold incl in H0.
         simpl in H0.
         assert (s = s). { reflexivity. }
@@ -1331,6 +1491,29 @@ Proof.
         destruct H5.
         subst.
         destruct spec.
+        apply NameTrace with (p := p).
+        {
+          unfold get_proc_defs in H2.
+          assert (Hdf := H6).
+          apply in_map
+            with (f := (fun def : ProcDef =>
+              match def with
+              | name ::= proc => (name, build_traces (bound_spec_traces n (channel a, definitions l)) proc)
+              end))
+            in H6.
+          Search "get_trace_proc_name".
+          assert (Hwf := H).
+          apply distinct_traces_map with (n := S n) in H.
+          apply get_trace_proc_name
+            with (procName := s) (traceSet := build_traces (bound_spec_traces n (channel a, definitions l)) p)
+            in H.
+          simpl in H. rewrite -> H in H2.
+          2: simpl. 2: apply H6.
+          
+        }
+        {
+          
+        } 
       }
       {
         intros.
@@ -1350,6 +1533,7 @@ Proof.
         
       }
     }
+  *)
 Qed.
 
 
