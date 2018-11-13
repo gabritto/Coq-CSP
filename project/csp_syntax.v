@@ -858,7 +858,7 @@ Admitted.
 
 Theorem traces_correctness:
 forall (spec: Spec) (proc: Proc)
-  (n: nat) (trace: Trace) (name: string),
+  (n: nat) (trace: Trace),
   well_formed_spec spec ->
   (
   incl
@@ -872,14 +872,13 @@ forall (spec: Spec) (proc: Proc)
     (build_traces (bound_spec_traces n spec) proc) ->
     IsProcTrace proc spec trace
   ) /\
-  (
-    DefInSpec (name ::= proc) spec ->
+  ( exists (name: string), proc = ProcName name ->
+    exists (procBody: Proc), DefInSpec (name ::= procBody) spec ->
     In trace (get_trace name (bound_spec_traces n spec)) ->
-    IsProcTrace proc spec trace
+    IsProcTrace procBody spec trace
   ).
 Proof.
   intro spec.
-  (*
   induction proc.
   (* Stop *)
   - intros.
@@ -892,6 +891,7 @@ Proof.
       apply AllEmptyTrace.
     }
     {
+      (*
       induction n.
       - intros.
         simpl in H1.
@@ -939,6 +939,8 @@ Proof.
         subst.
         + apply AllEmptyTrace.
         + simpl. apply H0.
+      *)
+      admit.
     }
   (* Skip *)
   - intros.
@@ -951,6 +953,7 @@ Proof.
       apply AllEmptyTrace.
     }
     {
+      (*
       induction n.
       - intros.
         simpl in H1.
@@ -998,6 +1001,8 @@ Proof.
         subst.
         + apply AllEmptyTrace.
         + simpl. apply H0.
+      *)
+      admit.
     }
   (* Prefix *)
   - intros.
@@ -1190,30 +1195,8 @@ Proof.
     }
     *)
   (* Name *)
-  - induction trace.
-    {
-      intros.
-      split.
-      {
-        intros.
-        apply AllEmptyTrace.
-      }
-      {
-        intros.
-        apply AllEmptyTrace.
-      }
-    }
-    {
-      intros.
-      split.
-      {
-        intros.
-        
-      }
-    }
-  
   - intros. induction n.
-    {
+    { (* n = 0 *)
       assert
       (incl
         (extract_names (ProcName s))
@@ -1253,6 +1236,7 @@ Proof.
         apply H0.
       }
       {
+        (*
         intros.
         apply H0.
         {
@@ -1323,21 +1307,30 @@ Proof.
           simpl.
           apply H2.
         }
+        *)
+        admit.
       }
     }
-    {
+    { (* n = S n*)
       split.
       {
         intros.
         destruct IHn.
         simpl in H2.
         eapply NameTrace.
-        admit.
-        (* reasoning: if extract_names (ProcName s)
-        is included in process_names_defined, there exists
-        proc such that s ::= proc is in DefInSpec.
-        use second inductive hypothesis to then prove
-        first part of NameTrace *)
+        simpl in H0. unfold incl in H0.
+        simpl in H0.
+        assert (s = s). { reflexivity. }
+        rewrite <- or_false in H5.
+        apply H0 in H5.
+        unfold process_names_defined in H5.
+        unfold get_spec_defs in H5.
+        apply in_map_iff in H5.
+        destruct H5.
+        destruct x.
+        destruct H5.
+        subst.
+        destruct spec.
       }
       {
         intros.
@@ -1354,52 +1347,9 @@ Proof.
               end))
           in H0.
         
+        
       }
     }
-    *)
-  induction n.
-  { (* n = 0 *)
-    induction proc.
-    {
-      admit.
-    }
-    {
-      admit.
-    }
-    {
-      admit.
-    }
-    {
-      admit.
-    }
-    {
-      admit.
-    }
-    {
-      admit.
-    }
-  }
-  { (* n = S n *)
-    induction proc.
-    {
-      admit.
-    }
-    {
-      admit.
-    }
-    {
-      admit.
-    }
-    {
-      admit.
-    }
-    {
-      admit.
-    }
-    {
-      split.
-    } 
-  }
 Qed.
 
 
