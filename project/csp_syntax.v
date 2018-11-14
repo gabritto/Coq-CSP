@@ -291,7 +291,7 @@ Fixpoint build_traces (traces: TracesMap) (p: Proc): list Trace :=
   | ProcPref e q =>
     let qTraces := build_traces traces q in
     let qWithA := map (fun trace => e :: trace) qTraces in
-      qTraces ++ qWithA
+      [[]] ++ qWithA
   | ProcExtChoice p q => (build_traces traces p) ++ (build_traces traces q)
   | ProcCond b p q => if b then (build_traces traces p) else (build_traces traces q)
   | ProcName name => get_trace name traces
@@ -881,12 +881,111 @@ forall (spec: Spec) (n: nat),
 Proof.
   intros.
   induction n.
-  { admit. }
+  {
+    split.
+    {
+      admit.
+    }
+    {
+      intros.
+      simpl in H2.
+      unfold DefInSpec in H1.
+    }
+  }
   {
     split.
     {
       induction proc.
-      { admit. } { admit. } { admit. } { admit. }
+      { (* Stop *)
+        intros.
+        simpl in H2. rewrite or_false in H2. subst.
+        apply AllEmptyTrace.
+      }
+      { (* Skip *)
+        intros.
+        simpl in H2. rewrite or_false in H2. subst.
+        apply AllEmptyTrace.
+      }
+      { (* Prefix *)
+        intros.
+        simpl in H2.
+        destruct H2.
+        {
+          subst.
+          apply AllEmptyTrace.
+        }
+        {
+          destruct trace.
+          1: apply AllEmptyTrace.
+          apply in_map_iff in H2.
+          repeat destruct H2.
+          apply PrefTrace.
+          apply IHproc.
+          {
+            apply H0.
+          }
+          {
+            simpl in H1.
+            unfold incl.
+            intros.
+            apply H1.
+            simpl. right. apply H2.
+          }
+          {
+            apply H3.
+          }
+          {
+            unfold EventInSpec.
+            apply H1.
+            simpl. left. reflexivity.
+          }
+        }
+      }
+      { (* External Choice *)
+        intros.
+        apply ExtChoiceTrace.
+        simpl in H2.
+        apply in_app_or in H2.
+        destruct H2.
+        {
+          left.
+          apply IHproc1.
+          {
+            simpl in H0. unfold incl. intros.
+            unfold incl in H0.
+            apply H0.
+            apply in_or_app. left. apply H3.
+          }
+          {
+            simpl in H1. unfold incl. intros.
+            unfold incl in H1.
+            apply H1.
+            apply in_or_app. left. apply H3.
+          }
+          {
+            apply H2.
+          }
+        }
+        {
+          right.
+          apply IHproc2.
+          {
+            simpl in H0. unfold incl. intros.
+            unfold incl in H0.
+            apply H0.
+            apply in_or_app. right. apply H3.
+          }
+          {
+            simpl in H1. unfold incl. intros.
+            unfold incl in H1.
+            apply H1.
+            apply in_or_app. right. apply H3.
+          }
+          {
+            apply H2.
+          }
+        } 
+      }
       {
         intros.
         destruct b.
@@ -896,6 +995,54 @@ Proof.
           apply IHproc1.
           {
             simpl in H0.
+            unfold incl.
+            intros.
+            unfold incl in H0.
+            apply H0.
+            Search "in_or_app".
+            apply in_or_app.
+            left. apply H3.
+          }
+          {
+            simpl in H1.
+            unfold incl.
+            intros.
+            unfold incl in H1.
+            apply H1.
+            Search "in_or_app".
+            apply in_or_app.
+            left. apply H3.
+          }
+          {
+            apply H2.
+          }
+        }
+        {
+          apply CondFalse.
+          reflexivity.
+          apply IHproc2.
+          {
+            simpl in H0.
+            unfold incl.
+            intros.
+            unfold incl in H0.
+            apply H0.
+            Search "in_or_app".
+            apply in_or_app.
+            right. apply H3.
+          }
+          {
+            simpl in H1.
+            unfold incl.
+            intros.
+            unfold incl in H1.
+            apply H1.
+            Search "in_or_app".
+            apply in_or_app.
+            right. apply H3.
+          }
+          {
+            apply H2.
           }
         }
       }
@@ -1039,6 +1186,7 @@ Proof.
       }
     }
   }
+Qed.
   (*
   induction proc.
   (* Stop *)
