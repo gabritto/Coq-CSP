@@ -1,11 +1,11 @@
 TODO:
 - Operators' associativity and level
-- Notation
-- Define Event type (maybe simpler at first)
-    - evento = string
-    - tau: caso especial (?)
-- Check CoInductive
-- Prove algebra laws within models
+- Notation for ProcName
+- Change event to include tick
+    - add event_dec
+    - redo proof for skip
+- Prove distinct_traces_map
+- Move traces definitions and proofs into traces.v
 
 Questions:
 
