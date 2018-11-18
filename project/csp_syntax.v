@@ -10,10 +10,13 @@ Set Implicit Arguments.
 Import ListNotations.
 Open Scope string_scope.
 
-Definition Event: Type := string.
+Inductive Event: Type :=
+  | Name: string -> Event
+  | Tick: Event.
 
 Theorem Event_eq_dec: forall (x y: Event), {x = y} + {x <> y}.
 Proof.
+  
   apply string_dec.
 Defined.
 
@@ -33,6 +36,8 @@ Inductive ProcDef: Type :=
 Inductive Spec: Type :=
   | SpecDef: Alphabet -> list ProcDef -> Spec. 
 
+
+
 Module CSP_Syntax_Notations.
 (* CSP *)
 Notation "a ~> p" := (ProcPref a p)
@@ -45,7 +50,7 @@ Notation "p << b >> q" := (ProcCond b p q)
   (at level 60, right associativity).
 
 (* TODO: find notation for this
-Notation "'var' p" := (ProcName p)
+Notation "p'" := (ProcName p)
   (at level 60, no associativity).
 *)
 
@@ -109,7 +114,6 @@ Example procs := match procTest with (SpecDef a ps) => ps end.
 Compute process_names_defined procs.
 Compute process_names_used procs.
 
-
 Fixpoint distinct {T: Type}
   (T_eq_dec: forall (x y: T), {x = y} + {x <> y}) (l: list T): Prop :=
   match l with
@@ -125,114 +129,6 @@ Definition well_formed_spec (spec: Spec): Prop :=
     distinct string_dec alphabet /\
     incl (events_used procDefs) alphabet
   end.
-
-(* Dealing with recursion *)
-
-Fixpoint find_process (p: string) (procDefs: list ProcDef): Proc :=
-  match procDefs with
-  | [] => Stop
-  | (Def q qbody) :: procDefs' =>
-     if string_dec q p then qbody else find_process p procDefs' 
-  end.
-
-(* Graph auxiliar definition *)
-Definition proc_dependency (spec: Spec) (p: string): list string :=
-  match spec with (SpecDef a ps) =>
-    let p_body := find_process p ps in
-    extract_names p_body
-  end.
-
-(* Map *)
-Module StringOT <: OrderedType.
-  Definition t := string.
-  
-  Definition eq := @eq t.
-  
-  Fixpoint lt (s1: string) (s2: string): Prop :=
-    match s1, s2 with
-    | EmptyString, EmptyString => False
-    | EmptyString, _ => True
-    | _, EmptyString => False
-    | (String ch1 s1'), (String ch2 s2') =>
-      let c1 := nat_of_ascii ch1 in
-      let c2 := nat_of_ascii ch2 in
-        c1 < c2 \/ (c1 = c2 /\ lt s1' s2')
-    end.
-  
-  Definition eq_refl := @refl_equal t.
-  
-  Definition eq_sym := @sym_eq t.
-  
-  Definition eq_trans := @trans_eq t.
-  
-  Theorem lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
-  Proof.
-    intros x. induction x.
-    - intros y z. intros H. intros Hyz.
-      destruct y.
-      + simpl in H. exfalso. apply H.
-      + unfold lt. destruct z.
-        * simpl in Hyz. apply Hyz.
-        * apply I.
-    - intros y z. intros H. intros Hyz. simpl.
-      destruct z.
-      + simpl in Hyz. destruct y.
-        * simpl in Hyz. apply Hyz.
-        * simpl in Hyz. apply Hyz.
-      + destruct y.
-        * simpl in H. exfalso. apply H.
-        * simpl in H. simpl in Hyz.
-          destruct H as [H | H].
-          {
-            destruct Hyz as [Hyz | Hyz].
-            - left. apply PeanoNat.Nat.lt_trans with (m := nat_of_ascii a1).
-              apply H. apply Hyz.
-            - destruct Hyz as [H' Hyz].
-              left. rewrite -> H' in H. apply H.
-          }
-          {
-            destruct Hyz as [Hyz | Hyz].
-            - apply proj1 in H.
-              rewrite <- H in Hyz. left. apply Hyz.
-            - right. destruct H as [H1 H2].
-              destruct Hyz as [H3 H4].
-              rewrite -> H3 in H1. split.
-              + apply H1.
-              + apply IHx with (y := y).
-                apply H2. apply H4.
-          }
-  Qed.
-  
-  Theorem lt_not_eq : forall x y : string, lt x y -> ~ eq x y.
-  Proof.
-    intros x y. intros ltxy. unfold not. intros eqxy.
-    unfold eq in eqxy. destruct x.
-    - simpl in ltxy. destruct y.
-      + apply ltxy.
-      + inversion eqxy.
-    - destruct y.
-      + simpl in ltxy. apply ltxy.
-      + simpl in eqxy.
-  Admitted.
-  
-  Check Compare.
-  
-  Check Compare lt eq.
-   
-  Definition compare: forall x y : string, Compare lt eq x y.
-  Proof.
-    intros x. induction x.
-    - intros y. destruct y.
-      + apply EQ. simpl. reflexivity.
-      + apply LT. simpl. apply I.
-    - intros y. destruct y.
-      + apply GT. simpl. apply I.
-      +
-  Admitted.
-  
-  Definition eq_dec := string_dec.
-  
-End StringOT.
 
 (* Traces *)
 Definition Trace: Type := list Event.
@@ -372,8 +268,6 @@ Inductive IsProcTrace: Proc -> Spec -> Trace -> Prop :=
       IsProcTrace p s t ->
       IsProcTrace (ProcCond b p q) s t.
 
-
-(*TODO: More practical definition of NameTrace? *)
 Example traceAround:
   IsProcTrace
     (("up" ~> ProcName "around") [-] ("down" ~> ProcName "around"))
@@ -402,10 +296,6 @@ Proof.
   simpl. unfold process_names_defined. Print in_map.
   apply in_map with (f:= (fun d : ProcDef => match d with | s0 ::= _ => s0 end)) in H. apply H.
 Qed.
-
-Check string_dec.
-
-Print get_trace.
 
 Lemma get_empty_trace_well_formed_spec: forall (s: Spec) (procName: string) (procBody: Proc),
   well_formed_spec s ->
@@ -458,8 +348,61 @@ Definition distinct_proc_names (tracesMap: TracesMap) :=
 Lemma distinct_traces_map: forall (s: Spec) (n: nat),
   well_formed_spec s -> distinct_proc_names (bound_spec_traces n s).
 Proof.
-  
-Admitted.
+  intros.
+  destruct n.
+  {
+    simpl. destruct s. simpl. simpl in H.
+    unfold distinct_proc_names.
+    apply proj1 in H.
+    assert
+      ((map
+     (fun nameTrace : string * list Trace =>
+      let (name, _) := nameTrace in name)
+     (map (fun name : string => (name, [[]]))
+        (process_names_defined l))) = (process_names_defined l)).
+    {
+      induction (process_names_defined l).
+      - simpl. reflexivity.
+      - simpl. simpl in H. apply proj2 in H.
+        apply IHl0 in H. rewrite -> H. reflexivity.
+    }
+    rewrite -> H0. apply H.
+  }
+  {
+    simpl.
+    unfold well_formed_spec in H.
+    destruct s. apply proj1 in H.
+    unfold process_names_defined in H.
+    unfold get_proc_defs.
+    unfold distinct_proc_names.
+    assert
+    (forall (spec: Spec) (defs: list ProcDef)
+      (n: nat),
+    ((map (fun nameTrace : string * list Trace => let (name, _) := nameTrace in name)
+     (map
+        (fun def : ProcDef =>
+         match def with
+         | name ::= proc =>
+             (name,
+             build_traces (bound_spec_traces n spec) proc)
+         end) defs)) = (map (fun d : ProcDef => match d with
+                               | s ::= _ => s
+                               end) defs))).
+    {
+      clear H.
+      induction defs.
+      {
+        simpl. intros. reflexivity.
+      }
+      {
+        intros. simpl. destruct a0.
+        rewrite IHdefs.
+        reflexivity.
+      }
+    }
+    rewrite H0. apply H.
+  }
+Qed.
 
 Lemma get_trace_proc_name: forall (procName: string)
   (traceSet: list Trace) (tracesMap: TracesMap),
@@ -524,8 +467,7 @@ forall (spec: Spec) (n: nat),
     IsProcTrace proc spec trace
   ) /\
   (
-    forall (proc: Proc) (name: string) (procBody: Proc) (trace: Trace),
-    proc = ProcName name ->
+    forall (name: string) (procBody: Proc) (trace: Trace),
     DefInSpec (name ::= procBody) spec ->
     In trace (get_trace name (bound_spec_traces n spec)) ->
     IsProcTrace procBody spec trace
@@ -679,7 +621,7 @@ Proof.
         apply in_map
           with (f := (fun name : string => (name, [@nil Event])))
           in H3.
-        apply distinct_traces_map with (n := 0) in H.
+        apply 6 with (n := 0) in H.
         apply get_trace_proc_name
           with (procName := s) (traceSet := [[]])
           in H.
@@ -699,9 +641,9 @@ Proof.
     }
     {
       intros.
-      simpl in H2.
-      unfold DefInSpec in H1.
-      unfold process_names_defined in H2.
+      simpl in H1.
+      unfold DefInSpec in H0.
+      unfold process_names_defined in H1.
       assert (Hwf := H).
       apply distinct_traces_map with (n := 0) in H.
       simpl in H.
@@ -709,14 +651,14 @@ Proof.
       apply in_map
         with (f := (fun d : ProcDef => match d with
                                       | s ::= _ => s end))
-        in H1.
+        in H0.
       apply in_map
         with (f := (fun name : string => (name, [@nil Event])))
-        in H1.
+        in H0.
       eapply get_trace_proc_name in H.
-      rewrite -> H in H2.
-      2: apply H1.
-      simpl in H2. rewrite or_false in H2.
+      rewrite -> H in H1.
+      2: apply H0.
+      simpl in H1. rewrite or_false in H1.
       subst. apply AllEmptyTrace.
     }
   }
@@ -954,9 +896,9 @@ Proof.
     }
     {
       intros.
-      simpl in H2.
+      simpl in H1.
       destruct IHn.
-      apply H3.
+      apply H2.
       {
         assert (Hwf := H).
         unfold well_formed_spec in Hwf.
@@ -972,8 +914,8 @@ Proof.
         rewrite in_flat_map.
         exists (name ::= procBody).
         split.
-        - apply H1.
-        - apply H5.
+        - apply H0.
+        - apply H4.
       }
       {
         assert (Hwf := H).
@@ -991,30 +933,68 @@ Proof.
         rewrite in_flat_map.
         exists (name ::= procBody).
         split.
-        - apply H1.
-        - apply H5.
+        - apply H0.
+        - apply H4.
       }
       {
-        unfold DefInSpec in H1.
+        unfold DefInSpec in H0.
         apply in_map
           with (f := (fun def : ProcDef =>
               match def with
               | name ::= proc => (name, build_traces (bound_spec_traces n spec) proc)
               end))
-          in H1.
+          in H0.
         assert (Hwf := H).
         apply distinct_traces_map with (n := S n) in H.
         simpl in H.
         apply get_trace_proc_name
           with (procName := name) (traceSet := build_traces (bound_spec_traces n spec) procBody)
           in H.
-        rewrite -> H in H2.
-        - apply H2.
+        rewrite -> H in H1.
         - apply H1.
+        - apply H0.
       }
     }
   }
 Qed.
+
+Print get_trace.
+Print IsProcTrace.
+Print bound_spec_traces.
+
+Theorem bound_spec_traces_correctness:
+forall (spec: Spec) (n: nat) (name: string) (proc: Proc)
+  (trace: Trace),
+  well_formed_spec spec ->
+  DefInSpec (name ::= proc) spec ->
+  In trace (get_trace name (bound_spec_traces n spec)) ->
+  IsProcTrace proc spec trace.
+Proof.
+  intros.
+  Print functional_traces_correctness.
+  pose proof functional_traces_correctness as Hfc.
+  apply Hfc with (n := n) in H.
+  apply proj2 in H.
+  apply H with (procBody := proc) (name := name).
+  apply H0.
+  apply H1.
+Qed.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
