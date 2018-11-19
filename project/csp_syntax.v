@@ -517,7 +517,10 @@ Proof.
       { (* Skip *)
         intros.
         simpl in H2. rewrite or_false in H2. subst.
-        apply AllEmptyTrace.
+        destruct H2.
+        - subst.
+          apply AllEmptyTrace.
+        - subst. apply SkipTrace. 
       }
       { (* Prefix *)
         intros.
@@ -650,7 +653,7 @@ Proof.
         apply in_map
           with (f := (fun name : string => (name, [@nil Event])))
           in H3.
-        apply 6 with (n := 0) in H.
+        apply distinct_traces_map with (n := 0) in H.
         apply get_trace_proc_name
           with (procName := s) (traceSet := [[]])
           in H.
@@ -703,7 +706,9 @@ Proof.
       { (* Skip *)
         intros.
         simpl in H2. rewrite or_false in H2. subst.
-        apply AllEmptyTrace.
+        destruct H2.
+        - subst. apply AllEmptyTrace.
+        - subst. apply SkipTrace.
       }
       { (* Prefix *)
         intros.
@@ -869,14 +874,14 @@ Proof.
           apply in_map
             with (f := (fun def : ProcDef =>
               match def with
-              | name ::= proc => (name, build_traces (bound_spec_traces n (channel a, definitions l)) proc)
+              | name ::= proc => (name, build_traces (bound_spec_traces n (SpecDef a l)) proc)
               end))
             in H6.
           Search "get_trace_proc_name".
           assert (Hwf := H).
           apply distinct_traces_map with (n := S n) in H.
           apply get_trace_proc_name
-            with (procName := s) (traceSet := build_traces (bound_spec_traces n (channel a, definitions l)) p)
+            with (procName := s) (traceSet := build_traces (bound_spec_traces n (SpecDef a l)) p)
             in H.
           simpl in H. rewrite -> H in H2.
           2: simpl. 2: apply H6.
