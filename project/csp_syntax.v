@@ -14,10 +14,38 @@ Inductive Event: Type :=
   | Name: string -> Event
   | Tick: Event.
 
-Theorem Event_eq_dec: forall (x y: Event), {x = y} + {x <> y}.
+Theorem Event_dec: forall (x y: Event), {x = y} + {x <> y}.
 Proof.
-  
-  apply string_dec.
+  destruct x.
+  {
+    destruct y.
+    {
+      destruct (string_dec s s0).
+      {
+        subst. left. reflexivity.
+      }
+      {
+        right.
+        unfold not.
+        intros. inversion H. apply n. apply H1.
+      }
+    }
+    {
+      right.
+      unfold not.
+      intros.
+      inversion H.
+    }
+  }
+  {
+    destruct y.
+    {
+      right. unfold not. intros. inversion H.
+    }
+    {
+      left. reflexivity.
+    }
+  }
 Defined.
 
 Definition Alphabet: Type := list Event.
@@ -36,7 +64,8 @@ Inductive ProcDef: Type :=
 Inductive Spec: Type :=
   | SpecDef: Alphabet -> list ProcDef -> Spec. 
 
-
+Definition build_events :=
+  map (fun str => Name str).
 
 Module CSP_Syntax_Notations.
 (* CSP *)
@@ -49,30 +78,31 @@ Notation "p [-] q" := (ProcExtChoice p q)
 Notation "p << b >> q" := (ProcCond b p q)
   (at level 60, right associativity).
 
-(* TODO: find notation for this
-Notation "p'" := (ProcName p)
+Notation "'p'' p" := (ProcName p)
   (at level 60, no associativity).
-*)
+
+Notation "'e'' e" := (Name e)
+  (at level 60, no associativity).
 
 Notation "p ::= q" := (Def p q)
   (at level 99, no associativity).
 
-Notation "'channel' a , 'definitions' ds" := (SpecDef a ds)
+Notation "'channel' a , 'definitions' ds" := (SpecDef (build_events a) ds)
   (at level 99, no associativity).
-  
-Check ProcName "P".
-
-Example procTest := channel ["a"; "b"],
-  definitions
-    ["P" ::= ("a" ~> Stop) [-] ("b" ~> Stop);
-     "Q" ::= (ProcName "R" << true >> Skip) ].
-
-Check procTest.
-Compute procTest.
 
 End CSP_Syntax_Notations.
 
 Import CSP_Syntax_Notations.
+  
+Check p'"P".
+
+Example procTest := channel ["a"; "b"],
+  definitions
+    ["P" ::= (e'"a" ~> Stop) [-] (e'"b" ~> Stop);
+     "Q" ::= (ProcName "R" << true >> Skip) ].
+
+Check procTest.
+Compute procTest.
 
 Fixpoint extract_names (proc: Proc): list string :=
   match proc with
@@ -126,7 +156,7 @@ Definition well_formed_spec (spec: Spec): Prop :=
   match spec with (SpecDef alphabet procDefs) =>
     distinct string_dec (process_names_defined procDefs) /\
     incl (process_names_used procDefs) (process_names_defined procDefs) /\
-    distinct string_dec alphabet /\
+    distinct Event_dec alphabet /\
     incl (events_used procDefs) alphabet
   end.
 
@@ -135,7 +165,7 @@ Definition Trace: Type := list Event.
 
 Theorem Trace_eq_dec: forall (x y: Trace), {x = y} + {x <> y}.
 Proof.
-  Search "list_eq_dec". apply list_eq_dec. apply Event_eq_dec.
+  Search "list_eq_dec". apply list_eq_dec. apply Event_dec.
 Defined.
 
 (* Trace and set of Traces definitions *)
@@ -183,7 +213,7 @@ Definition get_trace (procName: string)
 Fixpoint build_traces (traces: TracesMap) (p: Proc): list Trace :=
   match p with
   | Stop => [[]]
-  | Skip => [[]]
+  | Skip => [[]; [Tick]]
   | ProcPref e q =>
     let qTraces := build_traces traces q in
     let qWithA := map (fun trace => e :: trace) qTraces in
@@ -222,8 +252,8 @@ Compute bound_spec_traces 2 procTest.
 Example around := channel ["up"; "down"],
   definitions
   ["around" ::=
-    ("up" ~> ProcName "around") [-]
-    ("down" ~> ProcName "around")].
+    (e'"up" ~> p'"around") [-]
+    (e'"down" ~> p'"around")].
 Print well_formed_spec.    
 Compute well_formed_spec around.
 
@@ -244,12 +274,11 @@ Definition EventInSpec (e: Event) (s: Spec): Prop :=
   let alpha := get_spec_alphabet s in
   In e alpha.
 
-Print Trace.
-
 (* Inductive traces *)
 Inductive IsProcTrace: Proc -> Spec -> Trace -> Prop :=
   | AllEmptyTrace: forall (p: Proc) (s: Spec),
       IsProcTrace p s []
+  | SkipTrace: forall (s: Spec), IsProcTrace Skip s [Tick]
   | ExtChoiceTrace: forall (p q: Proc) (s: Spec) (t: Trace),
       IsProcTrace p s t \/ IsProcTrace q s t ->
       IsProcTrace (ProcExtChoice p q) s t
@@ -270,15 +299,15 @@ Inductive IsProcTrace: Proc -> Spec -> Trace -> Prop :=
 
 Example traceAround:
   IsProcTrace
-    (("up" ~> ProcName "around") [-] ("down" ~> ProcName "around"))
+    ((e'"up" ~> p'"around") [-] (e'"down" ~> p'"around"))
     around
-    (["up" ; "down"]).
+    ([e'"up" ; e'"down"]).
 Proof.
   apply ExtChoiceTrace.
   left. apply PrefTrace.
   {
     try apply NameTrace. unfold around.
-    apply NameTrace with (p := ("up" ~> ProcName "around") [-] ("down" ~> ProcName "around")).
+    apply NameTrace with (p := (e'"up" ~> ProcName "around") [-] (e'"down" ~> ProcName "around")).
     - apply ExtChoiceTrace. right. apply PrefTrace.
       + apply AllEmptyTrace.
       + unfold EventInSpec. simpl. right. left. reflexivity.
@@ -300,7 +329,7 @@ Qed.
 Lemma get_empty_trace_well_formed_spec: forall (s: Spec) (procName: string) (procBody: Proc),
   well_formed_spec s ->
   DefInSpec (Def procName procBody) s ->
-  (* In (procName, traceSet) traceMap -> *) get_trace procName ((map (fun name : string => (name, [[]]))
+  get_trace procName ((map (fun name : string => (name, [[]]))
           (process_names_defined (get_proc_defs s)))) = [[]].
 Proof.
   intros. simpl in H. unfold well_formed_spec in H.
