@@ -1,9 +1,12 @@
 CC=coqc
 
-project: coq_syntax
+project: traces
 
-coq_syntax: 
-	$(CC) coq_syntax.v    
+traces: csp_syntax
+	$(CC) traces.v 
+
+csp_syntax: 
+	$(CC) csp_syntax.v    
     
 clean:
 	rm *.vo *.glob *.aux *.crashcoqide
