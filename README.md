@@ -1,4 +1,4 @@
-# TAES
+# Coq-CSP
 
 Code for the [Advanced Topics in Software Engineering (TAES)](https://sites.google.com/a/cin.ufpe.br/if722) course.
 The course used [Coq](https://coq.inria.fr/) to develop programs and prove properties about them.
